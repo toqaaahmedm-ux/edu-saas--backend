@@ -25,15 +25,29 @@ export class UploadController {
     schema: {
       type: 'object',
       properties: {
-        image: {
-          type: 'string',
-          format: 'binary',
-        },
+        image: { type: 'string', format: 'binary' },
       },
     },
   })
   async uploadCourseImage(@UploadedFile() file: Express.Multer.File) {
     const url = await this.uploadService.uploadCourseImage(file);
+    return { success: true, data: { url } };
+  }
+
+  @Post('course-video')
+  @Roles('TEACHER', 'ADMIN')
+  @UseInterceptors(FileInterceptor('video', { storage: memoryStorage() }))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        video: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  async uploadCourseVideo(@UploadedFile() file: Express.Multer.File) {
+    const url = await this.uploadService.uploadCourseVideo(file);
     return { success: true, data: { url } };
   }
 }
