@@ -9,14 +9,15 @@ import { UsersModule } from './modules/users/users.module';
 import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { CertificatesModule } from './modules/certificates/certificates.module';
+import { UploadModule } from './modules/upload/upload.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{
-      ttl: 60000,   // ← نافذة 60 ثانية
-      limit: 100,   // ← max 100 طلب في الدقيقة
+      ttl: 60000,
+      limit: 100,
     }]),
     PrismaModule,
     AuthModule,
@@ -25,6 +26,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     EnrollmentsModule,
     QuizModule,
     CertificatesModule,
+    UploadModule,
   ],
   providers: [
     {
@@ -33,7 +35,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     },
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,   // ← Rate Limiting على كل الـ routes
+      useClass: ThrottlerGuard,
     },
   ],
 })
