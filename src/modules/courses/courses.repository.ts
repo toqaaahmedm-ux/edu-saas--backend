@@ -31,7 +31,16 @@ export class CoursesRepository {
     category?: string;
     price?: number;
   }) {
-    return this.prisma.course.create({ data });
+    return this.prisma.course.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        instructorId: data.instructorId,
+        thumbnail: data.thumbnail,
+        category: data.category,
+        price: data.price,
+      }
+    });
   }
 
   update(id: string, data: {
@@ -42,7 +51,18 @@ export class CoursesRepository {
     price?: number;
     status?: CourseStatus;
   }) {
-    return this.prisma.course.update({ where: { id }, data });
+    const { title, description, thumbnail, category, price, status } = data;
+    return this.prisma.course.update({
+      where: { id },
+      data: {
+        ...(title && { title }),
+        ...(description && { description }),
+        ...(thumbnail !== undefined && { thumbnail }),
+        ...(category !== undefined && { category }),
+        ...(price !== undefined && { price }),
+        ...(status && { status }),
+      }
+    });
   }
 
   delete(id: string) {
