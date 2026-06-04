@@ -12,7 +12,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Security Headers
   app.use(helmet());
 
   app.useGlobalPipes(new ValidationPipe({
@@ -29,7 +28,11 @@ async function bootstrap() {
   app.use(cookieParser());
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: [
+      'http://localhost:3000',
+      'https://edu-saas-platform.vercel.app',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean),
     credentials: true,
   });
 
@@ -44,8 +47,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(4000);
-  console.log('Backend running on http://localhost:4000');
-  console.log('Swagger docs: http://localhost:4000/api/docs');
+  await app.listen(process.env.PORT || 4000);
+  console.log(`Backend running on port ${process.env.PORT || 4000}`);
 }
 bootstrap();
