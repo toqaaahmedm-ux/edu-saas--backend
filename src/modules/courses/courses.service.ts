@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { CoursesRepository } from './courses.repository';
 import { CourseStatus } from '@prisma/client';
 
@@ -7,10 +7,16 @@ export class CoursesService {
   constructor(private readonly coursesRepository: CoursesRepository) {}
 
   async findAll(page: number = 1, limit: number = 10) {
-    const courses = await this.coursesRepository.findAll();
+    const allCourses = await this.coursesRepository.findAll();
+
+    // ── HIGH-02: Pagination حقيقية ──
+    const total = allCourses.length;
+    const start = (page - 1) * limit;
+    const courses = allCourses.slice(start, start + limit);
+
     return {
       courses,
-      meta: { page, limit, total: courses.length },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -28,6 +34,11 @@ export class CoursesService {
     category?: string;
     price?: number;
   }) {
+    // ── HIGH-04: Validation ──
+    if (!data.title?.trim()) throw new BadRequestException('Title is required');
+    if (!data.description?.trim()) throw new BadRequestException('Description is required');
+    if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
+
     return this.coursesRepository.create(data);
   }
 
@@ -45,9 +56,14 @@ export class CoursesService {
     },
   ) {
     const course = await this.findById(id);
+
+    // ── HIGH-03: حماية التعديل ──
     if (requestUserRole !== 'ADMIN' && course.instructorId !== requestUserId) {
       throw new ForbiddenException('You do not own this course');
     }
+
+    if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
+
     return this.coursesRepository.update(id, data);
   }
 
@@ -69,7 +85,12 @@ export class CoursesService {
   async getTeacherStats(instructorId: string) {
     const courses = await this.coursesRepository.findByInstructor(instructorId);
     const publishedCourses = courses.filter(c => c.status === 'PUBLISHED').length;
-    const totalStudents = courses.reduce((sum, c) => sum + ((c as any).enrollmentCount || 0), 0);
+
+    // ── HIGH-01: عدد الطلاب الحقيقي من _count.enrollments ──
+    const totalStudents = courses.reduce((sum, c) => {
+      return sum + ((c as any)._count?.enrollments || 0);
+    }, 0);
+
     return {
       totalStudents,
       publishedCourses,
@@ -92,7 +113,6 @@ export class CoursesService {
       totalCourses,
       totalStudents,
       totalRevenue,
-      avgRating: 4.8,
     };
   }
 }

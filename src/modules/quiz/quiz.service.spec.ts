@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { QuizService } from './quiz.service';
 import { QuizRepository } from './quiz.repository';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { CertificatesService } from '../certificates/certificates.service';
+import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 
 // ── Mock Repository ──────────────────────────────────────────────────────────
 const mockQuizRepository = {
@@ -10,9 +11,15 @@ const mockQuizRepository = {
   findById: jest.fn(),
   findQuestionsByQuizId: jest.fn(),
   findAttempt: jest.fn(),
+  findCompletedAttempt: jest.fn(),
   createAttempt: jest.fn(),
   updateAttemptScore: jest.fn(),
-  deleteIncompleteAttempt: jest.fn(),  // ← أضفناه
+  deleteIncompleteAttempt: jest.fn(),
+};
+
+// ── Mock CertificatesService ──────────────────────────────────────────────────
+const mockCertificatesService = {
+  issueIfPassed: jest.fn().mockResolvedValue(null),
 };
 
 // ── Test Data ─────────────────────────────────────────────────────────────────
@@ -49,6 +56,7 @@ describe('QuizService', () => {
       providers: [
         QuizService,
         { provide: QuizRepository, useValue: mockQuizRepository },
+        { provide: CertificatesService, useValue: mockCertificatesService },
       ],
     }).compile();
 
@@ -108,6 +116,7 @@ describe('QuizService', () => {
   describe('startQuiz', () => {
     it('ينشئ محاولة جديدة ويرجع attemptId', async () => {
       repository.findById.mockResolvedValue(mockQuiz);
+      repository.findCompletedAttempt.mockResolvedValue(null);
       repository.deleteIncompleteAttempt.mockResolvedValue(undefined);
       repository.createAttempt.mockResolvedValue(mockAttempt);
 
@@ -123,6 +132,13 @@ describe('QuizService', () => {
       await expect(service.startQuiz('student-123', 'wrong-id'))
         .rejects.toThrow(NotFoundException);
     });
+
+    it('يرمي ForbiddenException لو الطالب خلص الكويز قبل كده', async () => {
+      repository.findById.mockResolvedValue(mockQuiz);
+      repository.findCompletedAttempt.mockResolvedValue({ ...mockAttempt, submittedAt: new Date() });
+      await expect(service.startQuiz('student-123', 'quiz-123'))
+        .rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('submitQuiz', () => {
@@ -137,6 +153,7 @@ describe('QuizService', () => {
       repository.findAttempt.mockResolvedValue(mockAttempt);
       repository.findQuestionsByQuizId.mockResolvedValue(mockQuestions);
       repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 67 });
+      mockCertificatesService.issueIfPassed.mockResolvedValue(null);
     });
 
     it('يحسب النقاط صح — 2 صح من 3', async () => {
@@ -177,6 +194,13 @@ describe('QuizService', () => {
     it('يحفظ النتيجة في قاعدة البيانات', async () => {
       await service.submitQuiz('student-123', 'quiz-123', answers);
       expect(repository.updateAttemptScore).toHaveBeenCalledWith('attempt-123', 67);
+    });
+
+    it('يصدر شهادة تلقائياً لو النتيجة >= 60%', async () => {
+      const mockCert = { id: 'cert-123', studentId: 'student-123', courseId: 'course-123' };
+      mockCertificatesService.issueIfPassed.mockResolvedValue(mockCert);
+      const result = await service.submitQuiz('student-123', 'quiz-123', answers);
+      expect(result.certificate).toEqual(mockCert);
     });
 
     it('يرجع score = 0 لو الإجابات كلها غلط', async () => {

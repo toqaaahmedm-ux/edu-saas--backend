@@ -1,4 +1,3 @@
-// src/modules/certificates/certificates.service.ts
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { CertificatesRepository } from './certificates.repository';
 
@@ -35,6 +34,30 @@ export class CertificatesService {
       studentId,
       courseId,
       ...data,
+    });
+  }
+
+  // ── تصدر تلقائياً بعد نجاح الكويز ──
+  async issueIfPassed(
+    studentId: string,
+    courseId: string,
+    score: number,
+    passingScore: number = 60,
+  ) {
+    if (score < passingScore) return null;
+
+    const existing = await this.certificatesRepository.findByStudentAndCourse(
+      studentId,
+      courseId,
+    );
+    if (existing) return existing;
+
+    return this.certificatesRepository.create({
+      studentId,
+      courseId,
+      examName: 'General Exam',
+      institutionName: 'EduSaaS',
+      facultyName: 'Online Learning',
     });
   }
 }

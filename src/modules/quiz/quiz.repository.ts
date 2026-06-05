@@ -45,6 +45,17 @@ export class QuizRepository {
     });
   }
 
+  async findCompletedAttempt(studentId: string, quizId: string) {
+    // ← جديد: بيدور على attempt مكتمل فقط
+    return this.prisma.quizAttempt.findFirst({
+      where: {
+        studentId,
+        quizId,
+        submittedAt: { not: null },
+      },
+    });
+  }
+
   async createAttempt(studentId: string, quizId: string) {
     return this.prisma.quizAttempt.create({
       data: {
@@ -57,9 +68,13 @@ export class QuizRepository {
   }
 
   async deleteIncompleteAttempt(studentId: string, quizId: string) {
-    // ← جديد: امسح الـ attempt القديم لو موجود
+    // ← بيمسح فقط الـ attempts الغير مكتملة
     await this.prisma.quizAttempt.deleteMany({
-      where: { studentId, quizId },
+      where: {
+        studentId,
+        quizId,
+        submittedAt: null,
+      },
     });
   }
 
