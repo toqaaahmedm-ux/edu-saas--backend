@@ -1,15 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CertificatesService } from './certificates.service';
 import { CertificatesRepository } from './certificates.repository';
+import { PrismaService } from '../../prisma/prisma.service';
 
-// ── Mock Repository ───────────────────────────────────────────────────────────
 const mockCertificatesRepository = {
   findByStudentId: jest.fn(),
   create: jest.fn(),
   findById: jest.fn(),
+  findByStudentAndCourse: jest.fn(),
 };
 
-// ── Test Suite ────────────────────────────────────────────────────────────────
+const mockPrismaService = {
+  enrollment: {
+    findUnique: jest.fn(),
+  },
+};
+
 describe('CertificatesService', () => {
   let service: CertificatesService;
 
@@ -18,6 +24,7 @@ describe('CertificatesService', () => {
       providers: [
         CertificatesService,
         { provide: CertificatesRepository, useValue: mockCertificatesRepository },
+        { provide: PrismaService, useValue: mockPrismaService },
       ],
     }).compile();
 

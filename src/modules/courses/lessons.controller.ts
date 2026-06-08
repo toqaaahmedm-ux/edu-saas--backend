@@ -3,17 +3,19 @@ import { LessonsService } from './lessons.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
-import { Public } from '../../common/decorators/public.decorator';
 import { Role } from '@prisma/client';
 
 @Controller('courses/:courseId/lessons')
 export class LessonsController {
   constructor(private readonly lessonsService: LessonsService) {}
 
-  @Public()
   @Get()
-  getLessons(@Param('courseId') courseId: string) {
-    return this.lessonsService.getLessons(courseId);
+  getLessons(
+    @Param('courseId') courseId: string,
+    @GetUser('id') userId: string,
+    @GetUser('role') userRole: string,   // ← أضفنا
+  ) {
+    return this.lessonsService.getLessons(courseId, userId, userRole);
   }
 
   @UseGuards(RolesGuard)

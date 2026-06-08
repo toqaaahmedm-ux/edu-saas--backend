@@ -26,8 +26,21 @@ export class CoursesController {
   findAll(
     @Query('page') page = '1',
     @Query('limit') limit = '10',
+    @Query('search') search?: string,       // ← سيرش
+    @Query('category') category?: string,   // ← فلتر
   ) {
-    return this.coursesService.findAll(+page, +limit);
+    return this.coursesService.findAll(+page, +limit, search, category);
+  }
+
+  // ── Admin يشوف كل الكورسات حتى DRAFT ──
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('admin/all')
+  findAllAdmin(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    return this.coursesService.findAllAdmin(+page, +limit);
   }
 
   @UseGuards(RolesGuard)

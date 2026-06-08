@@ -1,9 +1,13 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { CertificatesRepository } from './certificates.repository';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class CertificatesService {
-  constructor(private readonly certificatesRepository: CertificatesRepository) {}
+  constructor(
+    private readonly certificatesRepository: CertificatesRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async getMyCertificates(studentId: string) {
     return this.certificatesRepository.findByStudentId(studentId);
@@ -24,6 +28,14 @@ export class CertificatesService {
       facultyName: string;
     },
   ) {
+    // ── SEC-02: التحقق من التسجيل في الكورس ──
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in the course to get a certificate');
+    }
+
     const existing = await this.certificatesRepository.findByStudentAndCourse(
       studentId,
       courseId,
@@ -45,6 +57,12 @@ export class CertificatesService {
     passingScore: number = 60,
   ) {
     if (score < passingScore) return null;
+
+    // ── SEC-02: التحقق من التسجيل ──
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId } },
+    });
+    if (!enrollment) return null;
 
     const existing = await this.certificatesRepository.findByStudentAndCourse(
       studentId,

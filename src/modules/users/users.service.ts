@@ -1,4 +1,3 @@
-// src/modules/users/users.service.ts
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { UsersRepository } from './users.repository';
 import { Role } from '@prisma/client';
@@ -28,15 +27,11 @@ export class UsersService {
   }
 
   async updateProfile(id: string, data: { name?: string }) {
-    await this.findById(id); // يتحقق إن المستخدم موجود
+    await this.findById(id);
     return this.usersRepository.updateProfile(id, data);
   }
 
-  async updatePassword(
-    id: string,
-    oldPassword: string,
-    newPassword: string,
-  ) {
+  async updatePassword(id: string, oldPassword: string, newPassword: string) {
     const user = await this.usersRepository.findByIdWithPassword(id);
     if (!user) throw new NotFoundException('User not found');
 
@@ -51,13 +46,31 @@ export class UsersService {
     return { message: 'Password updated successfully' };
   }
 
-  async updateRole(id: string, role: Role) {
+  async updateRole(id: string, role: Role, requestUserId: string) {
+    // ── SEC-03: Admin مش يقدر يغير role نفسه ──
+    if (id === requestUserId) {
+      throw new ForbiddenException('You cannot change your own role');
+    }
     await this.findById(id);
     return this.usersRepository.updateRole(id, role);
   }
 
-  async delete(id: string) {
-    await this.findById(id);
+  async delete(id: string, requestUserId: string) {
+    // ── SEC-03: Admin مش يقدر يحذف نفسه ──
+    if (id === requestUserId) {
+      throw new ForbiddenException('You cannot delete your own account');
+    }
+
+    const user = await this.findById(id);
+
+    // ── SEC-03: لو الـ user ده آخر Admin — مش يتحذف ──
+    if (user.role === Role.ADMIN) {
+      const adminCount = await this.usersRepository.countByRole(Role.ADMIN);
+      if (adminCount <= 1) {
+        throw new ForbiddenException('Cannot delete the last admin');
+      }
+    }
+
     await this.usersRepository.delete(id);
     return { message: 'User deleted successfully' };
   }

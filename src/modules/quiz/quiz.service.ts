@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { QuizRepository } from './quiz.repository';
 import { CertificatesService } from '../certificates/certificates.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class QuizService {
   constructor(
     private readonly quizRepository: QuizRepository,
     private readonly certificatesService: CertificatesService,
+    private readonly notificationsService: NotificationsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async getAllQuizzes() {
@@ -16,6 +20,8 @@ export class QuizService {
   async getQuizWithQuestions(quizId: string) {
     const quiz = await this.quizRepository.findByIdWithQuestions(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
+
+    // التحقق من وجود الكورس
     return quiz;
   }
 
@@ -23,7 +29,14 @@ export class QuizService {
     const quiz = await this.quizRepository.findById(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
-    // ── BUG-03: لو عنده attempt مكتمل — مش يقدر يعيد ──
+    // التحقق من التسجيل في الكورس
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in the course to take this quiz');
+    }
+
     const completed = await this.quizRepository.findCompletedAttempt(studentId, quizId);
     if (completed) {
       throw new ForbiddenException('You have already completed this quiz');
@@ -42,6 +55,14 @@ export class QuizService {
     const quiz = await this.quizRepository.findById(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
+    // التحقق من التسجيل في الكورس
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in the course to submit this quiz');
+    }
+
     const attempt = await this.quizRepository.findAttempt(studentId, quizId);
     if (!attempt) throw new BadRequestException('You must start the quiz first');
 
@@ -49,7 +70,6 @@ export class QuizService {
       throw new BadRequestException('Quiz already submitted');
     }
 
-    // ── BUG-05: التحقق من الوقت على السيرفر ──
     if (quiz.timeLimit) {
       const elapsed = (Date.now() - attempt.startedAt.getTime()) / 1000;
       const allowedSeconds = quiz.timeLimit + 5;
@@ -75,7 +95,13 @@ export class QuizService {
 
     await this.quizRepository.updateAttemptScore(attempt.id, score);
 
-    // ── الشهادة تطلع تلقائياً لو النتيجة >= 60% ──
+    await this.notificationsService.createNotification({
+      userId: studentId,
+      title: score >= 60 ? 'أحسنت! اجتزت الاختبار 🎉' : 'نتيجة الاختبار',
+      message: `حصلت على ${score}% في الاختبار`,
+      type: 'QUIZ_COMPLETED',
+    });
+
     let certificate = null;
     if (quiz.courseId) {
       certificate = await this.certificatesService.issueIfPassed(
@@ -83,6 +109,15 @@ export class QuizService {
         quiz.courseId,
         score,
       );
+
+      if (certificate) {
+        await this.notificationsService.createNotification({
+          userId: studentId,
+          title: 'تهانينا! حصلت على شهادة 🏆',
+          message: `تم إصدار شهادتك بنجاح`,
+          type: 'CERTIFICATE',
+        });
+      }
     }
 
     return {

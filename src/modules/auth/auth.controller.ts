@@ -23,12 +23,13 @@ export class AuthController {
     res.cookie('session-token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.json({
       success: true,
+      accessToken: result.accessToken,  // ← بيتبعت في الـ body عشان الـ localStorage
       data: result.data,
     });
   }
@@ -44,12 +45,13 @@ export class AuthController {
     res.cookie('session-token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.json({
       success: true,
+      accessToken: result.accessToken,
       data: result.data,
     });
   }

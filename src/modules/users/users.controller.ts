@@ -1,4 +1,3 @@
-// src/modules/users/users.controller.ts
 import {
   Controller,
   Get,
@@ -19,8 +18,6 @@ import { Role } from '@prisma/client';
 @Controller()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
-
-  // ───── /me endpoints ─────
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
@@ -46,8 +43,6 @@ export class UsersController {
     return this.usersService.updatePassword(id, body.oldPassword, body.newPassword);
   }
 
-  // ───── /admin/users endpoints ─────
-
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get('admin/users')
@@ -61,8 +56,11 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Delete('admin/users/:id')
-  delete(@Param('id') id: string) {
-    return this.usersService.delete(id);
+  delete(
+    @Param('id') id: string,
+    @GetUser('id') requestUserId: string,
+  ) {
+    return this.usersService.delete(id, requestUserId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -70,8 +68,9 @@ export class UsersController {
   @Patch('admin/users/:id/role')
   updateRole(
     @Param('id') id: string,
+    @GetUser('id') requestUserId: string,
     @Body() body: { role: Role },
   ) {
-    return this.usersService.updateRole(id, body.role);
+    return this.usersService.updateRole(id, body.role, requestUserId);
   }
 }

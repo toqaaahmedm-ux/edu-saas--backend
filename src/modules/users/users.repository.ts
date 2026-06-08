@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Role } from '@prisma/client';
@@ -79,5 +78,10 @@ export class UsersRepository {
 
   async delete(id: string): Promise<void> {
     await this.prisma.user.delete({ where: { id } });
+  }
+
+  // ── SEC-03: عدد الـ Admins ──
+  async countByRole(role: Role): Promise<number> {
+    return this.prisma.user.count({ where: { role } });
   }
 }

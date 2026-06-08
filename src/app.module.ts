@@ -11,6 +11,7 @@ import { QuizModule } from './modules/quiz/quiz.module';
 import { CertificatesModule } from './modules/certificates/certificates.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     QuizModule,
     CertificatesModule,
     UploadModule,
+    NotificationsModule,
   ],
   providers: [
     {

@@ -6,10 +6,31 @@ import { CourseStatus } from '@prisma/client';
 export class CoursesRepository {
   constructor(private prisma: PrismaService) {}
 
-  findAll() {
+  // ── سيرش وفلتر ──
+  findAll(search?: string, category?: string) {
     return this.prisma.course.findMany({
-      where: { status: CourseStatus.PUBLISHED },
+      where: {
+        status: CourseStatus.PUBLISHED,
+        ...(search && {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+          ],
+        }),
+        ...(category && { category }),
+      },
       include: { instructor: { select: { name: true, email: true } } },
+    });
+  }
+
+  // ── Admin يشوف كل الكورسات حتى DRAFT ──
+  findAllAdmin() {
+    return this.prisma.course.findMany({
+      include: {
+        instructor: { select: { name: true, email: true } },
+        _count: { select: { enrollments: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -77,7 +98,7 @@ export class CoursesRepository {
     return this.prisma.course.findMany({
       where: { instructorId },
       include: {
-        _count: { select: { enrollments: true } },  // ← HIGH-01: عدد الطلاب الحقيقي
+        _count: { select: { enrollments: true } },
       },
     });
   }
@@ -86,12 +107,8 @@ export class CoursesRepository {
     return this.prisma.enrollment.findMany({
       where: { courseId: { in: courseIds } },
       include: {
-        student: {
-          select: { id: true, name: true, email: true, role: true },
-        },
-        course: {
-          select: { id: true, title: true },
-        },
+        student: { select: { id: true, name: true, email: true, role: true } },
+        course: { select: { id: true, title: true } },
       },
     });
   }
@@ -101,21 +118,16 @@ export class CoursesRepository {
   }
 
   async countStudents() {
-    // ← HIGH-01: عدد الطلاب الفريدين المسجلين
     return this.prisma.enrollment.groupBy({
       by: ['studentId'],
     }).then(result => result.length);
   }
 
-  // ← BUG-01: إيرادات حقيقية من أسعار الكورسات
   async sumRevenue() {
     const activeEnrollments = await this.prisma.enrollment.findMany({
       where: { status: 'ACTIVE' },
-      include: {
-        course: { select: { price: true } },
-      },
+      include: { course: { select: { price: true } } },
     });
-
     return activeEnrollments.reduce((sum, enrollment) => {
       return sum + (Number(enrollment.course.price) || 0);
     }, 0);

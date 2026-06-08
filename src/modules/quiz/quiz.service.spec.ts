@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { QuizService } from './quiz.service';
 import { QuizRepository } from './quiz.repository';
 import { CertificatesService } from '../certificates/certificates.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 
 // ── Mock Repository ──────────────────────────────────────────────────────────
@@ -17,9 +18,12 @@ const mockQuizRepository = {
   deleteIncompleteAttempt: jest.fn(),
 };
 
-// ── Mock CertificatesService ──────────────────────────────────────────────────
 const mockCertificatesService = {
   issueIfPassed: jest.fn().mockResolvedValue(null),
+};
+
+const mockNotificationsService = {
+  createNotification: jest.fn().mockResolvedValue({}),
 };
 
 // ── Test Data ─────────────────────────────────────────────────────────────────
@@ -57,6 +61,7 @@ describe('QuizService', () => {
         QuizService,
         { provide: QuizRepository, useValue: mockQuizRepository },
         { provide: CertificatesService, useValue: mockCertificatesService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
@@ -154,6 +159,7 @@ describe('QuizService', () => {
       repository.findQuestionsByQuizId.mockResolvedValue(mockQuestions);
       repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 67 });
       mockCertificatesService.issueIfPassed.mockResolvedValue(null);
+      mockNotificationsService.createNotification.mockResolvedValue({});
     });
 
     it('يحسب النقاط صح — 2 صح من 3', async () => {

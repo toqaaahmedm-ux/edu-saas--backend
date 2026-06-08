@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException, ConflictException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { EnrollmentsRepository } from './enrollments.repository';
 import { CoursesRepository } from '../courses/courses.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class EnrollmentsService {
   constructor(
     private readonly enrollmentsRepository: EnrollmentsRepository,
     private readonly coursesRepository: CoursesRepository,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async enroll(studentId: string, courseId: string) {
@@ -16,7 +18,17 @@ export class EnrollmentsService {
     const existing = await this.enrollmentsRepository.findByStudentAndCourse(studentId, courseId);
     if (existing) throw new ConflictException('Already enrolled');
 
-    return this.enrollmentsRepository.create(studentId, courseId);
+    const enrollment = await this.enrollmentsRepository.create(studentId, courseId);
+
+    // إشعار للطالب
+    await this.notificationsService.createNotification({
+      userId: studentId,
+      title: 'تم التسجيل بنجاح! 🎉',
+      message: `تم تسجيلك في كورس "${course.title}"`,
+      type: 'ENROLLMENT',
+    });
+
+    return enrollment;
   }
 
   async getMyEnrollments(studentId: string) {
@@ -29,7 +41,7 @@ export class EnrollmentsService {
     return this.enrollmentsRepository.findByCourseId(courseId);
   }
 
-  async updateProgress(id: string, studentId: string, progress: number) {  // ← جديد
+  async updateProgress(id: string, studentId: string, progress: number) {
     if (progress < 0 || progress > 100) {
       throw new BadRequestException('Progress must be between 0 and 100');
     }
