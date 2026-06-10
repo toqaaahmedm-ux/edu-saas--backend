@@ -3,6 +3,7 @@ import { QuizService } from './quiz.service';
 import { QuizRepository } from './quiz.repository';
 import { CertificatesService } from '../certificates/certificates.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 
 // ── Mock Repository ──────────────────────────────────────────────────────────
@@ -24,6 +25,13 @@ const mockCertificatesService = {
 
 const mockNotificationsService = {
   createNotification: jest.fn().mockResolvedValue({}),
+};
+
+// Mock PrismaService عشان الـ enrollment check في startQuiz و submitQuiz
+const mockPrismaService = {
+  enrollment: {
+    findUnique: jest.fn(),
+  },
 };
 
 // ── Test Data ─────────────────────────────────────────────────────────────────
@@ -50,6 +58,14 @@ const mockAttempt = {
   submittedAt: null,
 };
 
+const mockEnrollment = {
+  id: 'enrollment-123',
+  studentId: 'student-123',
+  courseId: 'course-123',
+  progress: 100,
+  status: 'ACTIVE',
+};
+
 // ── Test Suite ────────────────────────────────────────────────────────────────
 describe('QuizService', () => {
   let service: QuizService;
@@ -62,18 +78,23 @@ describe('QuizService', () => {
         { provide: QuizRepository, useValue: mockQuizRepository },
         { provide: CertificatesService, useValue: mockCertificatesService },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: PrismaService, useValue: mockPrismaService },
       ],
     }).compile();
 
     service = module.get<QuizService>(QuizService);
     repository = mockQuizRepository;
     jest.clearAllMocks();
+
+    // Default: الطالب مسجل في الكورس
+    mockPrismaService.enrollment.findUnique.mockResolvedValue(mockEnrollment);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
   describe('getAllQuizzes', () => {
     it('يرجع كل الكويزات', async () => {
       const mockList = [mockQuiz];
@@ -90,6 +111,7 @@ describe('QuizService', () => {
     });
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
   describe('getQuizWithQuestions', () => {
     it('يرجع الكويز مع الأسئلة', async () => {
       const quizWithQuestions = { ...mockQuiz, questions: mockQuestions };
@@ -118,6 +140,7 @@ describe('QuizService', () => {
     });
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
   describe('startQuiz', () => {
     it('ينشئ محاولة جديدة ويرجع attemptId', async () => {
       repository.findById.mockResolvedValue(mockQuiz);
@@ -138,6 +161,14 @@ describe('QuizService', () => {
         .rejects.toThrow(NotFoundException);
     });
 
+    it('يرمي ForbiddenException لو الطالب مش مسجل في الكورس', async () => {
+      repository.findById.mockResolvedValue(mockQuiz);
+      // الطالب مش مسجل
+      mockPrismaService.enrollment.findUnique.mockResolvedValue(null);
+      await expect(service.startQuiz('student-123', 'quiz-123'))
+        .rejects.toThrow(ForbiddenException);
+    });
+
     it('يرمي ForbiddenException لو الطالب خلص الكويز قبل كده', async () => {
       repository.findById.mockResolvedValue(mockQuiz);
       repository.findCompletedAttempt.mockResolvedValue({ ...mockAttempt, submittedAt: new Date() });
@@ -146,11 +177,12 @@ describe('QuizService', () => {
     });
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
   describe('submitQuiz', () => {
     const answers = [
       { questionId: 'q1', answer: 2 },
       { questionId: 'q2', answer: 2 },
-      { questionId: 'q3', answer: 0 },
+      { questionId: 'q3', answer: 0 }, // غلط
     ];
 
     beforeEach(() => {
@@ -169,12 +201,15 @@ describe('QuizService', () => {
       expect(result.score).toBe(67);
     });
 
-    it('يرجع passed: true لو النتيجة >= 60%', async () => {
-      const result = await service.submitQuiz('student-123', 'quiz-123', answers);
+    // Part 7: غيرنا 60% لـ 70% عشان يتطابق مع الـ service
+    it('يرجع passed: true لو النتيجة >= 70%', async () => {
+      const allCorrect = mockQuestions.map(q => ({ questionId: q.id, answer: q.correctIndex }));
+      repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 100 });
+      const result = await service.submitQuiz('student-123', 'quiz-123', allCorrect);
       expect(result.passed).toBe(true);
     });
 
-    it('يرجع passed: false لو النتيجة < 60%', async () => {
+    it('يرجع passed: false لو النتيجة < 70%', async () => {
       const wrongAnswers = [
         { questionId: 'q1', answer: 0 },
         { questionId: 'q2', answer: 0 },
@@ -202,10 +237,12 @@ describe('QuizService', () => {
       expect(repository.updateAttemptScore).toHaveBeenCalledWith('attempt-123', 67);
     });
 
-    it('يصدر شهادة تلقائياً لو النتيجة >= 60%', async () => {
+    it('يصدر شهادة تلقائياً لو النتيجة >= 70%', async () => {
       const mockCert = { id: 'cert-123', studentId: 'student-123', courseId: 'course-123' };
       mockCertificatesService.issueIfPassed.mockResolvedValue(mockCert);
-      const result = await service.submitQuiz('student-123', 'quiz-123', answers);
+      const allCorrect = mockQuestions.map(q => ({ questionId: q.id, answer: q.correctIndex }));
+      repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 100 });
+      const result = await service.submitQuiz('student-123', 'quiz-123', allCorrect);
       expect(result.certificate).toEqual(mockCert);
     });
 
@@ -222,6 +259,47 @@ describe('QuizService', () => {
       const result = await service.submitQuiz('student-123', 'quiz-123', allCorrect);
       expect(result.score).toBe(100);
       expect(result.correct).toBe(3);
+    });
+
+    // ── Part 7: أهم test في الـ security ─────────────────────────────────
+    it('يرمي BadRequestException ويحفظ score = 0 لو عدى الـ time limit', async () => {
+      // startedAt = من 11 دقيقة (610 ثانية) — الـ timeLimit = 600 + 5 grace = 605
+      const expiredAttempt = {
+        ...mockAttempt,
+        startedAt: new Date(Date.now() - (mockQuiz.timeLimit + 10) * 1000),
+      };
+      repository.findAttempt.mockResolvedValue(expiredAttempt);
+
+      await expect(service.submitQuiz('student-123', 'quiz-123', answers))
+        .rejects.toThrow(BadRequestException);
+
+      // لازم يحفظ score = 0 في الـ DB حتى لو الوقت عدى
+      expect(repository.updateAttemptScore).toHaveBeenCalledWith('attempt-123', 0);
+    });
+
+    // ── BL-08: الـ answers الفاضية ────────────────────────────────────────
+    it('يرمي BadRequestException لو الـ answers array فاضية', async () => {
+      await expect(service.submitQuiz('student-123', 'quiz-123', []))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('يرمي BadRequestException لو الـ answers مش موجودة', async () => {
+      await expect(service.submitQuiz('student-123', 'quiz-123', null as any))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    // ── BL-02: enrollment check ───────────────────────────────────────────
+    it('يرمي ForbiddenException لو الطالب مش مسجل في الكورس', async () => {
+      mockPrismaService.enrollment.findUnique.mockResolvedValue(null);
+      await expect(service.submitQuiz('student-123', 'quiz-123', answers))
+        .rejects.toThrow(ForbiddenException);
+    });
+
+    it('يرمي BadRequestException لو الـ attempt اتبعت قبل كده', async () => {
+      const submittedAttempt = { ...mockAttempt, submittedAt: new Date() };
+      repository.findAttempt.mockResolvedValue(submittedAttempt);
+      await expect(service.submitQuiz('student-123', 'quiz-123', answers))
+        .rejects.toThrow(BadRequestException);
     });
   });
 });

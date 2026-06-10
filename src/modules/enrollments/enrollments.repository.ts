@@ -15,7 +15,15 @@ export class EnrollmentsRepository {
             id: true,
             title: true,
             thumbnail: true,
-            instructor: true,
+            // DL-01: بدل instructor: true اللي كان بيرجع hashedPassword
+            // دلوقتي بنرجع بس الحقول الآمنة
+            instructor: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+              },
+            },
             category: true,
           },
         },
@@ -54,7 +62,9 @@ export class EnrollmentsRepository {
     });
   }
 
-  async updateProgress(id: string, progress: number) {  // ← جديد
+  // BL-04: بتحدث الـ progress وبتغير الـ status تلقائياً
+  // لو progress = 100 → COMPLETED، غير كده → ACTIVE
+  async updateProgress(id: string, progress: number) {
     return this.prisma.enrollment.update({
       where: { id },
       data: {
@@ -64,7 +74,16 @@ export class EnrollmentsRepository {
     });
   }
 
-  async findById(id: string) {  // ← جديد
+  // alias عشان الـ service تشتغل من غير error
+  async updateProgressAndStatus(
+    id: string,
+    progress: number,
+    _status: EnrollmentStatus | string,
+  ) {
+    return this.updateProgress(id, progress);
+  }
+
+  async findById(id: string) {
     return this.prisma.enrollment.findUnique({ where: { id } });
   }
 }

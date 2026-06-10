@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { QuizRepository } from './quiz.repository';
 import { CertificatesService } from '../certificates/certificates.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -20,8 +25,6 @@ export class QuizService {
   async getQuizWithQuestions(quizId: string) {
     const quiz = await this.quizRepository.findByIdWithQuestions(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
-
-    // التحقق من وجود الكورس
     return quiz;
   }
 
@@ -29,7 +32,7 @@ export class QuizService {
     const quiz = await this.quizRepository.findById(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
-    // التحقق من التسجيل في الكورس
+    // BL-02: التحقق من التسجيل في الكورس قبل البدء
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
     });
@@ -37,11 +40,13 @@ export class QuizService {
       throw new ForbiddenException('You must be enrolled in the course to take this quiz');
     }
 
+    // BL-02: منع إعادة الكويز لو اتعمل بالفعل
     const completed = await this.quizRepository.findCompletedAttempt(studentId, quizId);
     if (completed) {
       throw new ForbiddenException('You have already completed this quiz');
     }
 
+    // حذف أي محاولة ناقصة قديمة قبل البدء
     await this.quizRepository.deleteIncompleteAttempt(studentId, quizId);
     const attempt = await this.quizRepository.createAttempt(studentId, quizId);
     return { attemptId: attempt.id, startedAt: attempt.startedAt };
@@ -52,10 +57,15 @@ export class QuizService {
     quizId: string,
     answers: { questionId: string; answer: number }[],
   ) {
+    // BL-08: رفض لو الـ answers فاضية
+    if (!answers || answers.length === 0) {
+      throw new BadRequestException('No answers submitted — request rejected');
+    }
+
     const quiz = await this.quizRepository.findById(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
-    // التحقق من التسجيل في الكورس
+    // BL-02: التحقق من التسجيل في الكورس قبل التسليم
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
     });
@@ -70,9 +80,10 @@ export class QuizService {
       throw new BadRequestException('Quiz already submitted');
     }
 
+    // BL-02: التحقق من الـ time limit — لو عدى الوقت، الـ score = 0
     if (quiz.timeLimit) {
       const elapsed = (Date.now() - attempt.startedAt.getTime()) / 1000;
-      const allowedSeconds = quiz.timeLimit + 5;
+      const allowedSeconds = quiz.timeLimit + 5; // 5 ثواني grace period
       if (elapsed > allowedSeconds) {
         await this.quizRepository.updateAttemptScore(attempt.id, 0);
         throw new BadRequestException('Quiz time limit exceeded');
@@ -81,6 +92,7 @@ export class QuizService {
 
     const questions = await this.quizRepository.findQuestionsByQuizId(quizId);
 
+    // حساب الـ score
     let correct = 0;
     for (const question of questions) {
       const submitted = answers.find((a) => a.questionId === question.id);
@@ -89,19 +101,21 @@ export class QuizService {
       }
     }
 
-    const score = questions.length > 0
-      ? Math.round((correct / questions.length) * 100)
-      : 0;
+    const score =
+      questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
 
     await this.quizRepository.updateAttemptScore(attempt.id, score);
 
+    // إرسال notification بالنتيجة
+    // BL-02: الـ passing score هو 70% مش 60%
     await this.notificationsService.createNotification({
       userId: studentId,
-      title: score >= 60 ? 'أحسنت! اجتزت الاختبار 🎉' : 'نتيجة الاختبار',
+      title: score >= 70 ? 'أحسنت! اجتزت الاختبار 🎉' : 'نتيجة الاختبار',
       message: `حصلت على ${score}% في الاختبار`,
       type: 'QUIZ_COMPLETED',
     });
 
+    // BL-02: إصدار الشهادة تلقائياً لو النتيجة >= 70%
     let certificate = null;
     if (quiz.courseId) {
       certificate = await this.certificatesService.issueIfPassed(
@@ -124,7 +138,7 @@ export class QuizService {
       score,
       correct,
       total: questions.length,
-      passed: score >= 60,
+      passed: score >= 70, // BL-02: 70% هو الحد الأدنى للنجاح
       certificate: certificate ?? null,
     };
   }

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { CertificatesRepository } from './certificates.repository';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -28,12 +34,17 @@ export class CertificatesService {
       facultyName: string;
     },
   ) {
-    // ── SEC-02: التحقق من التسجيل في الكورس ──
+    // BL-03: التحقق من التسجيل في الكورس
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId } },
     });
     if (!enrollment) {
       throw new ForbiddenException('You must be enrolled in the course to get a certificate');
+    }
+
+    // BL-03: التحقق من إكمال الكورس (progress = 100)
+    if (enrollment.progress < 100) {
+      throw new BadRequestException('Course not completed — progress must reach 100%');
     }
 
     const existing = await this.certificatesRepository.findByStudentAndCourse(
@@ -49,16 +60,15 @@ export class CertificatesService {
     });
   }
 
-  // ── تصدر تلقائياً بعد نجاح الكويز ──
+  // تصدر تلقائياً بعد نجاح الكويز (من quiz.service)
   async issueIfPassed(
     studentId: string,
     courseId: string,
     score: number,
-    passingScore: number = 60,
+    passingScore: number = 70, // BL-02: المعيار 70 مش 60
   ) {
     if (score < passingScore) return null;
 
-    // ── SEC-02: التحقق من التسجيل ──
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId } },
     });
@@ -68,7 +78,7 @@ export class CertificatesService {
       studentId,
       courseId,
     );
-    if (existing) return existing;
+    if (existing) return existing; // already issued — silent skip
 
     return this.certificatesRepository.create({
       studentId,

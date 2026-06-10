@@ -4,7 +4,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
-// ── Mock PrismaService ────────────────────────────────────────────────────────
 const mockPrismaService = {
   user: {
     findUnique: jest.fn(),
@@ -12,16 +11,15 @@ const mockPrismaService = {
   },
   session: {
     create: jest.fn(),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }), // DB-07 fix
   },
 };
 
-// ── Mock bcrypt ───────────────────────────────────────────────────────────────
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hashed_password'),
   compare: jest.fn(),
 }));
 
-// ── Test Data ─────────────────────────────────────────────────────────────────
 const mockUser = {
   id: 'user-123',
   name: 'Omar Ali',
@@ -33,18 +31,9 @@ const mockUser = {
   updatedAt: new Date(),
 };
 
-const registerDto = {
-  name: 'Omar Ali',
-  email: 'omar@edusaas.com',
-  password: 'password123',
-};
+const registerDto = { name: 'Omar Ali', email: 'omar@edusaas.com', password: 'password123' };
+const loginDto = { email: 'omar@edusaas.com', password: 'password123' };
 
-const loginDto = {
-  email: 'omar@edusaas.com',
-  password: 'password123',
-};
-
-// ── Test Suite ────────────────────────────────────────────────────────────────
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -58,13 +47,16 @@ describe('AuthService', () => {
 
     service = module.get<AuthService>(AuthService);
     jest.clearAllMocks();
+
+    // reset defaults after clearAllMocks
+    mockPrismaService.session.create.mockResolvedValue({});
+    mockPrismaService.session.deleteMany.mockResolvedValue({ count: 0 });
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  // ── register ──────────────────────────────────────────────────────────────
   describe('register', () => {
     it('ينشئ مستخدم جديد بنجاح', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
@@ -72,9 +64,7 @@ describe('AuthService', () => {
 
       const result = await service.register(registerDto);
 
-      expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({
-        where: { email: registerDto.email },
-      });
+      expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({ where: { email: registerDto.email } });
       expect(bcrypt.hash).toHaveBeenCalledWith(registerDto.password, 10);
       expect(result).toHaveProperty('id');
       expect(result).toHaveProperty('email', mockUser.email);
@@ -82,24 +72,18 @@ describe('AuthService', () => {
 
     it('يرمي ConflictException لو الإيميل موجود', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-
-      await expect(service.register(registerDto))
-        .rejects.toThrow(ConflictException);
-
+      await expect(service.register(registerDto)).rejects.toThrow(ConflictException);
       expect(mockPrismaService.user.create).not.toHaveBeenCalled();
     });
 
     it('يشفر كلمة المرور قبل الحفظ', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
       mockPrismaService.user.create.mockResolvedValue(mockUser);
-
       await service.register(registerDto);
-
       expect(bcrypt.hash).toHaveBeenCalledWith('password123', 10);
     });
   });
 
-  // ── login ─────────────────────────────────────────────────────────────────
   describe('login', () => {
     it('يرجع accessToken عند تسجيل دخول صح', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
@@ -110,21 +94,21 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('data');
       expect(result.data).toHaveProperty('email', mockUser.email);
+      // DB-07: تأكد إن cleanup اتعمل
+      expect(mockPrismaService.session.deleteMany).toHaveBeenCalledWith({
+        where: { userId: mockUser.id, expiresAt: { lt: expect.any(Date) } },
+      });
     });
 
     it('يرمي UnauthorizedException لو الإيميل مش موجود', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
-
-      await expect(service.login(loginDto))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
     });
 
     it('يرمي UnauthorizedException لو كلمة المرور غلط', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-      await expect(service.login(loginDto))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
     });
 
     it('مش بيرجع hashedPassword في الـ response', async () => {

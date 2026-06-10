@@ -26,8 +26,8 @@ export class CoursesController {
   findAll(
     @Query('page') page = '1',
     @Query('limit') limit = '10',
-    @Query('search') search?: string,       // ← سيرش
-    @Query('category') category?: string,   // ← فلتر
+    @Query('search') search?: string,
+    @Query('category') category?: string,
   ) {
     return this.coursesService.findAll(+page, +limit, search, category);
   }
@@ -57,11 +57,16 @@ export class CoursesController {
     return this.coursesService.getTeacherStats(user.id);
   }
 
+  // QE-02: أضفنا page و limit عشان مش نجيب كل الطلاب دفعة واحدة
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Get('teacher/students')
-  getTeacherStudents(@GetUser() user: any) {
-    return this.coursesService.getTeacherStudents(user.id);
+  getTeacherStudents(
+    @GetUser() user: any,
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+  ) {
+    return this.coursesService.getTeacherStudents(user.id, +page, +limit);
   }
 
   @UseGuards(RolesGuard)
@@ -121,6 +126,16 @@ export class CoursesController {
     return this.coursesService.updateStatus(id, body.status as CourseStatus);
   }
 
+  // BL-06: soft delete — بدل ما نمسح الكورس ونضيع بيانات الطلاب
+  // بنحوله لـ ARCHIVED وبيفضل موجود في الـ DB
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @Patch(':id/archive')
+  archive(@Param('id') id: string) {
+    return this.coursesService.archive(id);
+  }
+
+  // BL-06: الـ delete دلوقتي بيرفض لو الكورس PUBLISHED أو عنده طلاب
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.TEACHER)
   @Delete(':id')

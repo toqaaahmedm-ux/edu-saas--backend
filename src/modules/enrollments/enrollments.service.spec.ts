@@ -3,9 +3,8 @@ import { EnrollmentsService } from './enrollments.service';
 import { EnrollmentsRepository } from './enrollments.repository';
 import { CoursesRepository } from '../courses/courses.repository';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotFoundException, ConflictException } from '@nestjs/common';
+import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 
-// ── Mock Repositories ─────────────────────────────────────────────────────────
 const mockEnrollmentsRepository = {
   findByStudentAndCourse: jest.fn(),
   create: jest.fn(),
@@ -23,11 +22,13 @@ const mockNotificationsService = {
   createNotification: jest.fn().mockResolvedValue({}),
 };
 
-// ── Test Data ─────────────────────────────────────────────────────────────────
+// BL-01: الكورس لازم يكون PUBLISHED وسعره 0 عشان التسجيل يشتغل
 const mockCourse = {
   id: 'course-123',
   title: 'JavaScript Course',
   instructorId: 'teacher-123',
+  status: 'PUBLISHED',  // ← مطلوب للـ BL-01 check
+  price: 0,             // ← مطلوب للـ BL-01 check
 };
 
 const mockEnrollment = {
@@ -38,7 +39,6 @@ const mockEnrollment = {
   status: 'ACTIVE',
 };
 
-// ── Test Suite ────────────────────────────────────────────────────────────────
 describe('EnrollmentsService', () => {
   let service: EnrollmentsService;
 
@@ -54,6 +54,7 @@ describe('EnrollmentsService', () => {
 
     service = module.get<EnrollmentsService>(EnrollmentsService);
     jest.clearAllMocks();
+    mockNotificationsService.createNotification.mockResolvedValue({});
   });
 
   it('should be defined', () => {
@@ -83,6 +84,25 @@ describe('EnrollmentsService', () => {
       mockEnrollmentsRepository.findByStudentAndCourse.mockResolvedValue(mockEnrollment);
       await expect(service.enroll('student-123', 'course-123'))
         .rejects.toThrow(ConflictException);
+    });
+
+    // BL-01: tests جديدة للـ checks اللي أضفناها
+    it('يرمي BadRequestException لو الكورس مش PUBLISHED', async () => {
+      mockCoursesRepository.findById.mockResolvedValue({ ...mockCourse, status: 'DRAFT' });
+      await expect(service.enroll('student-123', 'course-123'))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('يرمي BadRequestException لو الكورس مدفوع', async () => {
+      mockCoursesRepository.findById.mockResolvedValue({ ...mockCourse, price: 99.99 });
+      await expect(service.enroll('student-123', 'course-123'))
+        .rejects.toThrow(BadRequestException);
+    });
+
+    it('يرمي BadRequestException لو المعلم بيسجل في كورسه', async () => {
+      mockCoursesRepository.findById.mockResolvedValue(mockCourse);
+      await expect(service.enroll('teacher-123', 'course-123'))
+        .rejects.toThrow(BadRequestException);
     });
   });
 });

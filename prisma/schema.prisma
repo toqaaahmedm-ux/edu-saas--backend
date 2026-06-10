@@ -64,6 +64,9 @@ model Course {
   quizzes      Quiz[]
   enrollments  Enrollment[]
   certificates Certificate[]
+
+  @@index([status])        // DB-06
+  @@index([instructorId])  // DB-06
 }
 
 model Lesson {
@@ -77,6 +80,8 @@ model Lesson {
   updatedAt DateTime @updatedAt
 
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, order])  // DB-04
 }
 
 model Quiz {
@@ -115,6 +120,8 @@ model Enrollment {
   course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId])
+  @@index([studentId])  // DB-06
+  @@index([courseId])   // DB-06
 }
 
 model QuizAttempt {
@@ -128,16 +135,25 @@ model QuizAttempt {
 
   student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
   quiz    Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, quizId])  // DB-03: منع أكتر من محاولة مكتملة لنفس الطالب
+  @@index([studentId, quizId])   // DB-06
 }
 
 model Certificate {
-  id        String   @id @default(uuid())
-  studentId String
-  courseId  String
-  issuedAt  DateTime @default(now())
+  id              String   @id @default(uuid())
+  studentId       String
+  courseId        String
+  issuedAt        DateTime @default(now())
+  examName        String   @default("General Exam")        // DB-02
+  institutionName String   @default("EduSaaS")             // DB-02
+  facultyName     String   @default("Online Learning")     // DB-02
 
   student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@index([studentId])  // DB-06
 }
 
 model Session {
@@ -148,6 +164,8 @@ model Session {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])  // DB-06 + DB-07
 }
 
 model Notification {
