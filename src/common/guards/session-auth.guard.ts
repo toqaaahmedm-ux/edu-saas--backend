@@ -8,26 +8,31 @@ import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { createHash } from 'crypto';
 
-// ── نوع الـ cache entry ───────────────────────────────
 interface CacheEntry {
   user: any;
-  expiresAt: number; // timestamp بالـ milliseconds
+  expiresAt: number;
 }
 
+// Week 7: renamed from SessionAuthGuard → SessionAuthGuard
+// اسم أوضح — الـ guard ده بيستخدم session cookies مش JWT
 @Injectable()
-export class JwtAuthGuard implements CanActivate {
-  // QE-04: in-memory cache — بيمنع DB query على كل request
+export class SessionAuthGuard implements CanActivate {
   private cache = new Map<string, CacheEntry>();
-  private readonly TTL_MS = 60 * 1000; // 60 ثانية
+  private readonly TTL_MS = 60 * 1000;
 
   constructor(
     private prisma: PrismaService,
     private reflector: Reflector,
   ) {}
 
+  // SEC-01: helper لعمل hash للـ token
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // لو الـ route عليها @Public() — اسمح بدون token
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -47,31 +52,31 @@ export class JwtAuthGuard implements CanActivate {
 
     if (!token) throw new UnauthorizedException();
 
-    // ── 1. دور في الـ cache الأول ────────────────────────
-    // QE-04: لو الـ token موجود في الـ cache وصالح — ارجع فوراً بدون DB query
+    // QE-04: دور في الـ cache بالـ raw token
     const cached = this.cache.get(token);
     if (cached && cached.expiresAt > Date.now()) {
       (request as any).user = cached.user;
       return true;
     }
 
-    // لو الـ cache entry منتهية، امسحها
     if (cached) this.cache.delete(token);
 
-    // ── 2. لو مش في الـ cache — اجيب من الـ DB ──────────
+    // SEC-01: hash الـ token قبل البحث في الـ DB
+    const tokenHash = this.hashToken(token);
+
     const session = await this.prisma.session.findUnique({
-      where: { token },
+      where: { token: tokenHash },
       include: { user: true },
     });
 
     if (!session || session.expiresAt < new Date()) {
       if (session) {
-        await this.prisma.session.delete({ where: { token } });
+        await this.prisma.session.delete({ where: { token: tokenHash } });
       }
       throw new UnauthorizedException();
     }
 
-    // ── 3. احفظ في الـ cache لـ 60 ثانية ────────────────
+    // احفظ في الـ cache بالـ raw token
     this.cache.set(token, {
       user: session.user,
       expiresAt: Date.now() + this.TTL_MS,
@@ -81,7 +86,6 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 
-  // بتتستدعى عند الـ logout عشان تمسح الـ token من الـ cache فوراً
   invalidateToken(token: string) {
     this.cache.delete(token);
   }

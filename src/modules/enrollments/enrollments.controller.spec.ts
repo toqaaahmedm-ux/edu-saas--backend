@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EnrollmentsController } from './enrollments.controller';
 import { EnrollmentsService } from './enrollments.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 
 const mockEnrollmentsService = {
   enroll: jest.fn(),
@@ -19,7 +19,7 @@ describe('EnrollmentsController', () => {
         { provide: EnrollmentsService, useValue: mockEnrollmentsService },
       ],
     })
-      .overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })
+      .overrideGuard(SessionAuthGuard).useValue({ canActivate: () => true })
       .compile();
 
     controller = module.get<EnrollmentsController>(EnrollmentsController);

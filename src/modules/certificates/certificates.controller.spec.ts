@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CertificatesController } from './certificates.controller';
 import { CertificatesService } from './certificates.service';
 import { CertificatesRepository } from './certificates.repository';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 
 const mockCertificatesService = {
@@ -30,7 +30,7 @@ describe('CertificatesController', () => {
         { provide: CertificatesRepository, useValue: {} },
       ],
     })
-      .overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })
+      .overrideGuard(SessionAuthGuard).useValue({ canActivate: () => true })
       .overrideGuard(RolesGuard).useValue({ canActivate: () => true })
       .compile();
 

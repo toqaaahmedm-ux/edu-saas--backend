@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 
 const mockNotificationsService = {
   getUserNotifications: jest.fn(),
@@ -20,7 +20,7 @@ describe('NotificationsController', () => {
         { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     })
-      .overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true })
+      .overrideGuard(SessionAuthGuard).useValue({ canActivate: () => true })
       .compile();
 
     controller = module.get<NotificationsController>(NotificationsController);

@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CertificatesService } from './certificates.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
@@ -17,14 +17,14 @@ import { Role } from '@prisma/client';
 export class CertificatesController {
   constructor(private readonly certificatesService: CertificatesService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.STUDENT)
   @Get('my')
   getMyCertificates(@GetUser() user: any) {
     return this.certificatesService.getMyCertificates(user.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.STUDENT)
   @Post('my')
   createMyCertificate(
@@ -43,7 +43,7 @@ export class CertificatesController {
     return this.certificatesService.findById(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.TEACHER)
   @Post()
   create(

@@ -10,7 +10,7 @@ import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { QuizModule } from './modules/quiz/quiz.module';
 import { CertificatesModule } from './modules/certificates/certificates.module';
 import { UploadModule } from './modules/upload/upload.module';
-import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from './common/guards/session-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
@@ -33,7 +33,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
   providers: [
     {
       provide: APP_GUARD,
-      useClass: JwtAuthGuard,
+      useClass: SessionAuthGuard,
     },
     {
       provide: APP_GUARD,

@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
@@ -19,13 +19,13 @@ import { Role } from '@prisma/client';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Get('me')
   getMe(@GetUser('id') id: string) {
     return this.usersService.findById(id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Patch('me')
   updateMe(
     @GetUser('id') id: string,
@@ -34,7 +34,7 @@ export class UsersController {
     return this.usersService.updateProfile(id, body);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Patch('me/password')
   updatePassword(
     @GetUser('id') id: string,
@@ -43,7 +43,7 @@ export class UsersController {
     return this.usersService.updatePassword(id, body.oldPassword, body.newPassword);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Get('admin/users')
   findAll(
@@ -53,7 +53,7 @@ export class UsersController {
     return this.usersService.findAll(+page, +limit);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Delete('admin/users/:id')
   delete(
@@ -63,7 +63,7 @@ export class UsersController {
     return this.usersService.delete(id, requestUserId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch('admin/users/:id/role')
   updateRole(
