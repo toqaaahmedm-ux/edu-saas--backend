@@ -8,7 +8,8 @@ export class QuizRepository {
   async findAllWithCourse() {
     return this.prisma.quiz.findMany({
       include: {
-        course: { select: { title: true } },
+        // INT-06: أضفنا id عشان الـ course badge يظهر صح
+        course: { select: { id: true, title: true } },
         questions: { select: { id: true } },
       },
     });
@@ -46,7 +47,6 @@ export class QuizRepository {
   }
 
   async findCompletedAttempt(studentId: string, quizId: string) {
-    // ← جديد: بيدور على attempt مكتمل فقط
     return this.prisma.quizAttempt.findFirst({
       where: {
         studentId,
@@ -68,7 +68,6 @@ export class QuizRepository {
   }
 
   async deleteIncompleteAttempt(studentId: string, quizId: string) {
-    // ← بيمسح فقط الـ attempts الغير مكتملة
     await this.prisma.quizAttempt.deleteMany({
       where: {
         studentId,

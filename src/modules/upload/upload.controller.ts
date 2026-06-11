@@ -24,14 +24,14 @@ export class UploadController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: {
-        image: { type: 'string', format: 'binary' },
-      },
+      properties: { image: { type: 'string', format: 'binary' } },
     },
   })
   async uploadCourseImage(@UploadedFile() file: Express.Multer.File) {
     const url = await this.uploadService.uploadCourseImage(file);
-    return { success: true, data: { url } };
+    // INT-02: شلنا الـ manual wrap — TransformInterceptor هيلفه تلقائياً
+    // النتيجة: { success: true, data: { url } } ✅
+    return { url };
   }
 
   @Post('course-video')
@@ -41,13 +41,12 @@ export class UploadController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: {
-        video: { type: 'string', format: 'binary' },
-      },
+      properties: { video: { type: 'string', format: 'binary' } },
     },
   })
   async uploadCourseVideo(@UploadedFile() file: Express.Multer.File) {
     const url = await this.uploadService.uploadCourseVideo(file);
-    return { success: true, data: { url } };
+    // INT-02: شلنا الـ manual wrap
+    return { url };
   }
 }
