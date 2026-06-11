@@ -15,7 +15,7 @@ interface CacheEntry {
   expiresAt: number;
 }
 
-// Week 7: renamed from SessionAuthGuard → SessionAuthGuard
+// Week 7: renamed from JwtAuthGuard → SessionAuthGuard
 // اسم أوضح — الـ guard ده بيستخدم session cookies مش JWT
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
