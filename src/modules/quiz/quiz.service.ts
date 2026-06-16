@@ -18,8 +18,8 @@ export class QuizService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async getAllQuizzes() {
-    return this.quizRepository.findAllWithCourse();
+  async getAllQuizzes(tenantId: string) {
+    return this.quizRepository.findAllWithCourse(tenantId);
   }
 
   async getQuizWithQuestions(quizId: string) {
@@ -28,11 +28,11 @@ export class QuizService {
     return quiz;
   }
 
-  async startQuiz(studentId: string, quizId: string) {
+  async startQuiz(tenantId: string, studentId: string, quizId: string) {
     const quiz = await this.quizRepository.findById(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
-    // BL-02: التحقق من التسجيل في الكورس قبل البدء
+    // BL-02: التحقق من التسجيل في الكورس
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
     });
@@ -46,13 +46,14 @@ export class QuizService {
       throw new ForbiddenException('You have already completed this quiz');
     }
 
-    // حذف أي محاولة ناقصة قديمة قبل البدء
     await this.quizRepository.deleteIncompleteAttempt(studentId, quizId);
-    const attempt = await this.quizRepository.createAttempt(studentId, quizId);
+    // Multi-tenant: بنبعت tenantId في الـ createAttempt
+    const attempt = await this.quizRepository.createAttempt(tenantId, studentId, quizId);
     return { attemptId: attempt.id, startedAt: attempt.startedAt };
   }
 
   async submitQuiz(
+    tenantId: string,
     studentId: string,
     quizId: string,
     answers: { questionId: string; answer: number }[],
@@ -65,7 +66,7 @@ export class QuizService {
     const quiz = await this.quizRepository.findById(quizId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
-    // BL-02: التحقق من التسجيل في الكورس قبل التسليم
+    // BL-02: التحقق من التسجيل
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
     });
@@ -80,10 +81,10 @@ export class QuizService {
       throw new BadRequestException('Quiz already submitted');
     }
 
-    // BL-02: التحقق من الـ time limit — لو عدى الوقت، الـ score = 0
+    // BL-02: التحقق من الـ time limit
     if (quiz.timeLimit) {
       const elapsed = (Date.now() - attempt.startedAt.getTime()) / 1000;
-      const allowedSeconds = quiz.timeLimit + 5; // 5 ثواني grace period
+      const allowedSeconds = quiz.timeLimit + 5;
       if (elapsed > allowedSeconds) {
         await this.quizRepository.updateAttemptScore(attempt.id, 0);
         throw new BadRequestException('Quiz time limit exceeded');
@@ -92,7 +93,6 @@ export class QuizService {
 
     const questions = await this.quizRepository.findQuestionsByQuizId(quizId);
 
-    // حساب الـ score
     let correct = 0;
     for (const question of questions) {
       const submitted = answers.find((a) => a.questionId === question.id);
@@ -106,8 +106,6 @@ export class QuizService {
 
     await this.quizRepository.updateAttemptScore(attempt.id, score);
 
-    // إرسال notification بالنتيجة
-    // BL-02: الـ passing score هو 70% مش 60%
     await this.notificationsService.createNotification({
       userId: studentId,
       title: score >= 70 ? 'أحسنت! اجتزت الاختبار 🎉' : 'نتيجة الاختبار',
@@ -119,6 +117,7 @@ export class QuizService {
     let certificate = null;
     if (quiz.courseId) {
       certificate = await this.certificatesService.issueIfPassed(
+        tenantId,
         studentId,
         quiz.courseId,
         score,
@@ -138,7 +137,7 @@ export class QuizService {
       score,
       correct,
       total: questions.length,
-      passed: score >= 70, // BL-02: 70% هو الحد الأدنى للنجاح
+      passed: score >= 70,
       certificate: certificate ?? null,
     };
   }

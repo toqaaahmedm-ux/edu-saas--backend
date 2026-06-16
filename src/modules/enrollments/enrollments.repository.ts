@@ -6,23 +6,17 @@ import { EnrollmentStatus } from '@prisma/client';
 export class EnrollmentsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByStudentId(studentId: string) {
+  async findByStudentId(tenantId: string, studentId: string) {
     return this.prisma.enrollment.findMany({
-      where: { studentId },
+      where: { tenantId, studentId },
       include: {
         course: {
           select: {
             id: true,
             title: true,
             thumbnail: true,
-            // DL-01: بدل instructor: true اللي كان بيرجع hashedPassword
-            // دلوقتي بنرجع بس الحقول الآمنة
             instructor: {
-              select: {
-                id: true,
-                name: true,
-                avatar: true,
-              },
+              select: { id: true, name: true, avatar: true },
             },
             category: true,
           },
@@ -38,20 +32,19 @@ export class EnrollmentsRepository {
     });
   }
 
-  async findByCourseId(courseId: string) {
+  async findByCourseId(tenantId: string, courseId: string) {
     return this.prisma.enrollment.findMany({
-      where: { courseId },
+      where: { tenantId, courseId },
       include: {
-        student: {
-          select: { id: true, name: true, email: true },
-        },
+        student: { select: { id: true, name: true, email: true } },
       },
     });
   }
 
-  async create(studentId: string, courseId: string) {
+  // Multi-tenant: لازم tenantId في الـ create
+  async create(tenantId: string, studentId: string, courseId: string) {
     return this.prisma.enrollment.create({
-      data: { studentId, courseId },
+      data: { tenantId, studentId, courseId },
     });
   }
 
@@ -62,8 +55,7 @@ export class EnrollmentsRepository {
     });
   }
 
-  // BL-04: بتحدث الـ progress وبتغير الـ status تلقائياً
-  // لو progress = 100 → COMPLETED، غير كده → ACTIVE
+  // BL-04: progress = 100 → COMPLETED تلقائياً
   async updateProgress(id: string, progress: number) {
     return this.prisma.enrollment.update({
       where: { id },
@@ -74,7 +66,6 @@ export class EnrollmentsRepository {
     });
   }
 
-  // alias عشان الـ service تشتغل من غير error
   async updateProgressAndStatus(
     id: string,
     progress: number,

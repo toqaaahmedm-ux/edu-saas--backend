@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   UnauthorizedException,
   ConflictException,
@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -15,20 +15,22 @@ export class AuthService {
 
   private sessionCache = new Map<string, { userId: string; expiresAt: Date; user: any }>();
 
-  // SEC-01: helper لعمل hash للـ token قبل التخزين في الـ DB
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  async register(dto: RegisterDto) {
+  // Multi-tenant: محتاجين tenantId مع كل عملية
+  async register(dto: RegisterDto, tenantId: string) {
+    // email unique per tenant مش globally
     const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { tenantId_email: { tenantId, email: dto.email } },
     });
     if (existing) throw new ConflictException('Email already exists');
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: {
+        tenantId,
         name: dto.name,
         email: dto.email,
         hashedPassword,
@@ -38,16 +40,16 @@ export class AuthService {
     return { id: user.id, name: user.name, email: user.email, role: user.role };
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, tenantId: string) {
+    // البحث بـ tenantId + email مع بعض
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { tenantId_email: { tenantId, email: dto.email } },
     });
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
     const valid = await bcrypt.compare(dto.password, user.hashedPassword);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
-    // SEC-01: raw token للـ client، hash للـ DB
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -63,19 +65,18 @@ export class AuthService {
 
     const userData = {
       id: user.id,
+      tenantId: user.tenantId,
       name: user.name,
       email: user.email,
       role: user.role,
     };
 
-    // Cache بالـ raw token
     this.sessionCache.set(rawToken, { userId: user.id, expiresAt, user: userData });
 
     return { accessToken: rawToken, data: userData };
   }
 
   async refresh(oldToken: string) {
-    // SEC-01: hash الـ token قبل البحث في الـ DB
     const oldTokenHash = this.hashToken(oldToken);
 
     const session = await this.prisma.session.findUnique({
@@ -102,6 +103,7 @@ export class AuthService {
 
     const userData = {
       id: session.user.id,
+      tenantId: session.user.tenantId,
       name: session.user.name,
       email: session.user.email,
       role: session.user.role,
@@ -113,7 +115,6 @@ export class AuthService {
   }
 
   async logout(token: string) {
-    // SEC-01: hash قبل البحث
     const tokenHash = this.hashToken(token);
     await this.prisma.session.deleteMany({ where: { token: tokenHash } });
     this.sessionCache.delete(token);
@@ -121,13 +122,11 @@ export class AuthService {
   }
 
   async getMe(token: string) {
-    // تحقق من الـ cache بالـ raw token
     const cached = this.sessionCache.get(token);
     if (cached && cached.expiresAt > new Date()) {
       return cached.user;
     }
 
-    // SEC-01: hash قبل البحث في الـ DB
     const tokenHash = this.hashToken(token);
     const session = await this.prisma.session.findUnique({
       where: { token: tokenHash },
@@ -139,6 +138,7 @@ export class AuthService {
 
     const user = {
       id: session.user.id,
+      tenantId: session.user.tenantId,
       name: session.user.name,
       email: session.user.email,
       role: session.user.role,
@@ -149,5 +149,36 @@ export class AuthService {
     this.sessionCache.set(token, { userId: user.id, expiresAt: session.expiresAt, user });
 
     return user;
+  }
+
+  // SuperAdmin login — بدون tenantId
+  async loginSuperAdmin(dto: LoginDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { email: dto.email, tenantId: null, role: 'SUPER_ADMIN' },
+    });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const valid = await bcrypt.compare(dto.password, user.hashedPassword);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await this.prisma.session.create({
+      data: { userId: user.id, token: tokenHash, expiresAt },
+    });
+
+    const userData = {
+      id: user.id,
+      tenantId: null,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    };
+
+    this.sessionCache.set(rawToken, { userId: user.id, expiresAt, user: userData });
+
+    return { accessToken: rawToken, data: userData };
   }
 }

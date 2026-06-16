@@ -1,4 +1,11 @@
-import { PrismaClient, Role, CourseStatus, EnrollmentStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  Role,
+  CourseStatus,
+  EnrollmentStatus,
+  TenantStatus,
+  BillingCycle,
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -7,6 +14,8 @@ async function main() {
   console.log("🌱 Starting seed...");
 
   // ─── 1. Clean up (order matters — dependents first) ──────────────
+  await prisma.auditLog.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.certificate.deleteMany();
   await prisma.quizAttempt.deleteMany();
   await prisma.question.deleteMany();
@@ -15,46 +24,175 @@ async function main() {
   await prisma.lesson.deleteMany();
   await prisma.course.deleteMany();
   await prisma.session.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.subscription.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.planFeature.deleteMany();
+  await prisma.plan.deleteMany();
+  await prisma.tenant.deleteMany();
   console.log("🧹 Cleaned existing data");
 
-  // ─── 2. Users ─────────────────────────────────────────────────────
-  const hashedPassword = await bcrypt.hash("password123", 10);
-
-  const admin = await prisma.user.create({
+  // ─── 2. Plans ─────────────────────────────────────────────────────
+  const basicPlan = await prisma.plan.create({
     data: {
-      name: "Admin User",
-      email: "admin@edusaas.com",
-      hashedPassword,
-      role: Role.ADMIN,
-      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Admin",
+      name: "Basic",
+      billingCycle: BillingCycle.MONTHLY,
+      price: 199,
+      currency: "EGP",
+      maxStudents: 50,
+      maxCourses: 5,
+      maxStorageGb: 5,
+      maxLiveHours: 0,
+      features: {
+        create: [
+          { featureKey: "QUIZZES",       enabled: true  },
+          { featureKey: "CERTIFICATES",  enabled: true  },
+          { featureKey: "LIVE_LECTURES", enabled: false },
+          { featureKey: "CUSTOM_DOMAIN", enabled: false },
+          { featureKey: "ANALYTICS",     enabled: false },
+        ],
+      },
     },
   });
 
-  const teacher1 = await prisma.user.create({
+  const goldenPlan = await prisma.plan.create({
     data: {
-      name: "Ahmed Hassan",
-      email: "ahmed@edusaas.com",
+      name: "Golden",
+      billingCycle: BillingCycle.MONTHLY,
+      price: 499,
+      currency: "EGP",
+      maxStudents: 500,
+      maxCourses: 50,
+      maxStorageGb: 50,
+      maxLiveHours: 20,
+      features: {
+        create: [
+          { featureKey: "QUIZZES",       enabled: true },
+          { featureKey: "CERTIFICATES",  enabled: true },
+          { featureKey: "LIVE_LECTURES", enabled: true },
+          { featureKey: "CUSTOM_DOMAIN", enabled: true },
+          { featureKey: "ANALYTICS",     enabled: true },
+        ],
+      },
+    },
+  });
+
+  console.log("💳 Created 2 plans (Basic, Golden)");
+
+  // ─── 3. SuperAdmin (tenantId = null) ─────────────────────────────
+  const hashedPassword = await bcrypt.hash("password123", 10);
+
+  const superAdmin = await prisma.user.create({
+    data: {
+      tenantId: null, // platform-level user
+      name: "Super Admin",
+      email: "superadmin@platform.com",
       hashedPassword,
-      role: Role.TEACHER,
+      role: Role.SUPER_ADMIN,
+      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=SuperAdmin",
+    },
+  });
+
+  console.log("👑 Created SuperAdmin");
+
+  // ─── 4. Tenant 1 — EduSaaS Academy (Golden) ──────────────────────
+  // بنعمل الـ owner الأول بدون tenantId عشان نربطه بعدين
+  const tenant1Owner = await prisma.user.create({
+    data: {
+      tenantId: null, // هيتحدث بعد ما ننشئ الـ tenant
+      name: "Ahmed Hassan",
+      email: "ahmed@edusaas-academy.com",
+      hashedPassword,
+      role: Role.ADMIN,
       avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Ahmed",
     },
   });
 
-  const teacher2 = await prisma.user.create({
+  const tenant1 = await prisma.tenant.create({
     data: {
+      name: "EduSaaS Academy",
+      subdomain: "edusaas-academy",
+      status: TenantStatus.ACTIVE,
+      planId: goldenPlan.id,
+      ownerUserId: tenant1Owner.id,
+    },
+  });
+
+  // ربط الـ owner بالـ tenant
+  await prisma.user.update({
+    where: { id: tenant1Owner.id },
+    data: { tenantId: tenant1.id },
+  });
+
+  // ─── 5. Tenant 2 — Design School (Basic) ─────────────────────────
+  const tenant2Owner = await prisma.user.create({
+    data: {
+      tenantId: null,
       name: "Sara Mohamed",
-      email: "sara@edusaas.com",
+      email: "sara@design-school.com",
+      hashedPassword,
+      role: Role.ADMIN,
+      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Sara",
+    },
+  });
+
+  const tenant2 = await prisma.tenant.create({
+    data: {
+      name: "Design School",
+      subdomain: "design-school",
+      status: TenantStatus.TRIAL,
+      planId: basicPlan.id,
+      ownerUserId: tenant2Owner.id,
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: tenant2Owner.id },
+    data: { tenantId: tenant2.id },
+  });
+
+  console.log("🏫 Created 2 tenants (EduSaaS Academy, Design School)");
+
+  // ─── 6. Subscriptions ────────────────────────────────────────────
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant1.id,
+      planId: goldenPlan.id,
+      status: "ACTIVE",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant2.id,
+      planId: basicPlan.id,
+      status: "ACTIVE",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // trial 14 يوم
+    },
+  });
+
+  console.log("💰 Created 2 subscriptions");
+
+  // ─── 7. Teachers & Students — Tenant 1 ───────────────────────────
+  const teacher1 = await prisma.user.create({
+    data: {
+      tenantId: tenant1.id,
+      name: "Mohamed Khaled",
+      email: "mohamed@edusaas-academy.com",
       hashedPassword,
       role: Role.TEACHER,
-      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Sara",
+      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Mohamed",
     },
   });
 
   const student1 = await prisma.user.create({
     data: {
+      tenantId: tenant1.id,
       name: "Omar Ali",
-      email: "omar@edusaas.com",
+      email: "omar@edusaas-academy.com",
       hashedPassword,
       role: Role.STUDENT,
       avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Omar",
@@ -63,21 +201,46 @@ async function main() {
 
   const student2 = await prisma.user.create({
     data: {
+      tenantId: tenant1.id,
       name: "Nour Khaled",
-      email: "nour@edusaas.com",
+      email: "nour@edusaas-academy.com",
       hashedPassword,
       role: Role.STUDENT,
       avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Nour",
     },
   });
 
-  console.log("👥 Created 5 users (1 admin, 2 teachers, 2 students)");
+  // ─── 8. Teachers & Students — Tenant 2 ───────────────────────────
+  const teacher2 = await prisma.user.create({
+    data: {
+      tenantId: tenant2.id,
+      name: "Layla Ibrahim",
+      email: "layla@design-school.com",
+      hashedPassword,
+      role: Role.TEACHER,
+      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Layla",
+    },
+  });
 
-  // ─── 3. Courses ───────────────────────────────────────────────────
+  const student3 = await prisma.user.create({
+    data: {
+      tenantId: tenant2.id,
+      name: "Youssef Ahmed",
+      email: "youssef@design-school.com",
+      hashedPassword,
+      role: Role.STUDENT,
+      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=Youssef",
+    },
+  });
+
+  console.log("👥 Created 5 users across 2 tenants");
+
+  // ─── 9. Courses — Tenant 1 ────────────────────────────────────────
   const course1 = await prisma.course.create({
     data: {
+      tenantId: tenant1.id,
       title: "مقدمة في JavaScript",
-      description: "تعلم أساسيات JavaScript من الصفر حتى الاحتراف. شامل المتغيرات، الدوال، DOM، وأكثر.",
+      description: "تعلم أساسيات JavaScript من الصفر حتى الاحتراف.",
       category: "Programming",
       price: 0,
       status: CourseStatus.PUBLISHED,
@@ -88,8 +251,9 @@ async function main() {
 
   const course2 = await prisma.course.create({
     data: {
+      tenantId: tenant1.id,
       title: "React من الصفر",
-      description: "بناء تطبيقات ويب حديثة باستخدام React. Components، Hooks، State Management.",
+      description: "بناء تطبيقات ويب حديثة باستخدام React.",
       category: "Programming",
       price: 99.99,
       status: CourseStatus.PUBLISHED,
@@ -98,10 +262,12 @@ async function main() {
     },
   });
 
+  // ─── 10. Courses — Tenant 2 ───────────────────────────────────────
   const course3 = await prisma.course.create({
     data: {
+      tenantId: tenant2.id,
       title: "تصميم UI/UX للمبتدئين",
-      description: "أساسيات تصميم واجهات المستخدم وتجربة المستخدم. Figma، Color Theory، Typography.",
+      description: "أساسيات تصميم واجهات المستخدم وتجربة المستخدم.",
       category: "Design",
       price: 49.99,
       status: CourseStatus.PUBLISHED,
@@ -110,132 +276,97 @@ async function main() {
     },
   });
 
-  const course4 = await prisma.course.create({
-    data: {
-      title: "Node.js وبناء APIs",
-      description: "بناء RESTful APIs باستخدام Node.js وExpress. Authentication، Database، Deployment.",
-      category: "Backend",
-      price: 149.99,
-      status: CourseStatus.DRAFT,
-      instructorId: teacher2.id,
-      thumbnail: "https://picsum.photos/seed/node/800/450",
-    },
-  });
+  console.log("📚 Created 3 courses across 2 tenants");
 
-  console.log("📚 Created 4 courses");
-
-  // ─── 4. Lessons ───────────────────────────────────────────────────
+  // ─── 11. Lessons ──────────────────────────────────────────────────
   await prisma.lesson.createMany({
     data: [
-      // Course 1 — JS
-      { title: "ما هو JavaScript؟", videoUrl: "https://example.com/video/1", duration: 600, order: 1, courseId: course1.id },
-      { title: "المتغيرات والأنواع", videoUrl: "https://example.com/video/2", duration: 900, order: 2, courseId: course1.id },
-      { title: "الشروط والحلقات", videoUrl: "https://example.com/video/3", duration: 1200, order: 3, courseId: course1.id },
-      { title: "الدوال (Functions)", videoUrl: "https://example.com/video/4", duration: 1500, order: 4, courseId: course1.id },
-      { title: "التعامل مع DOM", videoUrl: "https://example.com/video/5", duration: 1800, order: 5, courseId: course1.id },
-      // Course 2 — React
-      { title: "لماذا React؟", videoUrl: "https://example.com/video/6", duration: 600, order: 1, courseId: course2.id },
-      { title: "أول Component", videoUrl: "https://example.com/video/7", duration: 900, order: 2, courseId: course2.id },
-      { title: "Props وState", videoUrl: "https://example.com/video/8", duration: 1200, order: 3, courseId: course2.id },
-      { title: "useEffect Hook", videoUrl: "https://example.com/video/9", duration: 1500, order: 4, courseId: course2.id },
-      // Course 3 — UI/UX
-      { title: "مبادئ التصميم", videoUrl: "https://example.com/video/10", duration: 900, order: 1, courseId: course3.id },
-      { title: "نظرية الألوان", videoUrl: "https://example.com/video/11", duration: 1200, order: 2, courseId: course3.id },
-      { title: "التايبوغرافي", videoUrl: "https://example.com/video/12", duration: 900, order: 3, courseId: course3.id },
+      { title: "ما هو JavaScript؟",    videoUrl: "https://example.com/v/1",  duration: 600,  order: 1, courseId: course1.id },
+      { title: "المتغيرات والأنواع",    videoUrl: "https://example.com/v/2",  duration: 900,  order: 2, courseId: course1.id },
+      { title: "الشروط والحلقات",       videoUrl: "https://example.com/v/3",  duration: 1200, order: 3, courseId: course1.id },
+      { title: "الدوال (Functions)",    videoUrl: "https://example.com/v/4",  duration: 1500, order: 4, courseId: course1.id },
+      { title: "التعامل مع DOM",        videoUrl: "https://example.com/v/5",  duration: 1800, order: 5, courseId: course1.id },
+      { title: "لماذا React؟",          videoUrl: "https://example.com/v/6",  duration: 600,  order: 1, courseId: course2.id },
+      { title: "أول Component",         videoUrl: "https://example.com/v/7",  duration: 900,  order: 2, courseId: course2.id },
+      { title: "Props وState",          videoUrl: "https://example.com/v/8",  duration: 1200, order: 3, courseId: course2.id },
+      { title: "مبادئ التصميم",         videoUrl: "https://example.com/v/9",  duration: 900,  order: 1, courseId: course3.id },
+      { title: "نظرية الألوان",          videoUrl: "https://example.com/v/10", duration: 1200, order: 2, courseId: course3.id },
+      { title: "التايبوغرافي",           videoUrl: "https://example.com/v/11", duration: 900,  order: 3, courseId: course3.id },
     ],
   });
 
-  console.log("🎬 Created lessons");
+  console.log("🎬 Created 11 lessons");
 
-  // ─── 5. Quizzes ───────────────────────────────────────────────────
+  // ─── 12. Quizzes ──────────────────────────────────────────────────
   const quiz1 = await prisma.quiz.create({
     data: { title: "اختبار أساسيات JavaScript", timeLimit: 600, courseId: course1.id },
   });
 
   const quiz2 = await prisma.quiz.create({
-    data: { title: "اختبار React Fundamentals", timeLimit: 900, courseId: course2.id },
-  });
-
-  const quiz3 = await prisma.quiz.create({
     data: { title: "اختبار UI/UX Basics", timeLimit: 480, courseId: course3.id },
   });
 
-  console.log("📝 Created 3 quizzes");
+  console.log("📝 Created 2 quizzes");
 
-  // ─── 6. Questions ─────────────────────────────────────────────────
+  // ─── 13. Questions ────────────────────────────────────────────────
   await prisma.question.createMany({
     data: [
-      { text: "ما هو ناتج: typeof null ؟", options: ["null", "undefined", "object", "string"], correctIndex: 2, quizId: quiz1.id },
-      { text: "أي من التالي يُستخدم لتعريف متغير ثابت في JS؟", options: ["var", "let", "const", "static"], correctIndex: 2, quizId: quiz1.id },
-      { text: "ما الفرق بين == و === في JavaScript؟", options: ["لا فرق بينهما", "=== يقارن القيمة فقط", "=== يقارن القيمة والنوع معاً", "== يقارن النوع فقط"], correctIndex: 2, quizId: quiz1.id },
-      { text: "ما ناتج: console.log(1 + '2') ؟", options: ["3", "'12'", "12", "Error"], correctIndex: 2, quizId: quiz1.id },
-      { text: "أي method تُستخدم لإضافة عنصر في نهاية Array؟", options: ["push()", "pop()", "shift()", "unshift()"], correctIndex: 0, quizId: quiz1.id },
-      { text: "ما هو ناتج: Boolean('') ؟", options: ["true", "false", "null", "undefined"], correctIndex: 1, quizId: quiz1.id },
-      { text: "أي keyword تُستخدم لإنشاء دالة سهمية (arrow function)؟", options: ["function", "=>", "def", "lambda"], correctIndex: 1, quizId: quiz1.id },
-      { text: "ما ناتج: [1,2,3].length ؟", options: ["2", "3", "4", "undefined"], correctIndex: 1, quizId: quiz1.id },
-      { text: "أي method تُستخدم لتحويل JSON string إلى Object؟", options: ["JSON.stringify()", "JSON.parse()", "JSON.convert()", "JSON.toObject()"], correctIndex: 1, quizId: quiz1.id },
-      { text: "ما هو ناتج: Math.floor(4.9) ؟", options: ["5", "4", "4.9", "Error"], correctIndex: 1, quizId: quiz1.id },
+      { text: "ما هو ناتج: typeof null ؟",                          options: ["null", "undefined", "object", "string"],                    correctIndex: 2, quizId: quiz1.id },
+      { text: "أي keyword لتعريف متغير ثابت؟",                       options: ["var", "let", "const", "static"],                            correctIndex: 2, quizId: quiz1.id },
+      { text: "ما الفرق بين == و === ؟",                             options: ["لا فرق", "=== يقارن القيمة فقط", "=== يقارن القيمة والنوع", "== يقارن النوع فقط"], correctIndex: 2, quizId: quiz1.id },
+      { text: "ما ناتج: console.log(1 + '2') ؟",                    options: ["3", "'12'", "12", "Error"],                                  correctIndex: 2, quizId: quiz1.id },
+      { text: "أي method لإضافة عنصر في نهاية Array؟",              options: ["push()", "pop()", "shift()", "unshift()"],                   correctIndex: 0, quizId: quiz1.id },
+      { text: "ما ناتج: Boolean('') ؟",                              options: ["true", "false", "null", "undefined"],                       correctIndex: 1, quizId: quiz1.id },
+      { text: "ما ناتج: [1,2,3].length ؟",                          options: ["2", "3", "4", "undefined"],                                  correctIndex: 1, quizId: quiz1.id },
+      { text: "أي method لتحويل JSON string إلى Object؟",           options: ["JSON.stringify()", "JSON.parse()", "JSON.convert()", "JSON.toObject()"], correctIndex: 1, quizId: quiz1.id },
     ],
   });
 
   await prisma.question.createMany({
     data: [
-      { text: "ما هو الـ JSX؟", options: ["JavaScript XML — طريقة لكتابة HTML داخل JavaScript", "نوع من أنواع الـ CSS", "مكتبة خارجية منفصلة عن React", "اختصار لـ JavaScript Extension"], correctIndex: 0, quizId: quiz2.id },
-      { text: "ما الـ Hook المستخدم لإدارة الـ state في Functional Components؟", options: ["useEffect", "useState", "useContext", "useRef"], correctIndex: 1, quizId: quiz2.id },
-      { text: "متى يعمل useEffect بـ empty dependency array [] ؟", options: ["عند كل render", "مرة واحدة فقط عند mount الـ component", "عند تغيير الـ props فقط", "لا يعمل أبداً"], correctIndex: 1, quizId: quiz2.id },
-      { text: "ما الـ key الصحيح لإضافة class في JSX؟", options: ["class", "className", "classList", "htmlClass"], correctIndex: 1, quizId: quiz2.id },
-      { text: "أي من التالي صحيح لتمرير props للـ component؟", options: ["<MyComp {name='Ahmed'} />", "<MyComp props={name:'Ahmed'} />", "<MyComp name='Ahmed' />", "<MyComp [name]='Ahmed' />"], correctIndex: 2, quizId: quiz2.id },
-      { text: "ما وظيفة الـ key في قوائم React؟", options: ["تحديد ترتيب العناصر", "مساعدة React في تتبع التغييرات بكفاءة", "تحسين الـ CSS", "لا وظيفة لها"], correctIndex: 1, quizId: quiz2.id },
-      { text: "ما الـ Hook المستخدم للوصول لـ Context؟", options: ["useState", "useEffect", "useContext", "useReducer"], correctIndex: 2, quizId: quiz2.id },
-      { text: "كيف تمنع الـ form من تحديث الصفحة عند الـ submit؟", options: ["return false داخل الـ handler", "e.preventDefault() داخل الـ handler", "stopPropagation()", "لا يمكن منعه"], correctIndex: 1, quizId: quiz2.id },
+      { text: "ما الفرق بين UI وUX؟",              options: ["لا فرق", "UI شكل الواجهة، UX تجربة المستخدم", "UX البرمجة، UI التصميم", "UI للموبايل فقط"], correctIndex: 1, quizId: quiz2.id },
+      { text: "ما مبدأ Contrast في التصميم؟",       options: ["نفس اللون في كل مكان", "إبراز العناصر المهمة بصرياً", "تقليل الألوان", "رفع حجم الخط"], correctIndex: 1, quizId: quiz2.id },
+      { text: "ما قاعدة 60-30-10؟",                options: ["60% رئيسي، 30% ثانوي، 10% تمييز", "توزيع الوقت", "نسبة المحتوى", "عدد الألوان"], correctIndex: 0, quizId: quiz2.id },
+      { text: "ما الـ Wireframe؟",                  options: ["النسخة النهائية", "مخطط هيكلي بسيط للصفحة", "كود HTML", "أنيميشن"], correctIndex: 1, quizId: quiz2.id },
+      { text: "أفضل حجم للنص الأساسي على الويب؟", options: ["10-12px", "16-18px", "24-28px", "8-10px"], correctIndex: 1, quizId: quiz2.id },
+      { text: "ما مبدأ Gestalt؟",                   options: ["استخدام الصور فقط", "إدراك الدماغ للعناصر كمجموعات", "طريقة ترميز الألوان", "نوع Typography"], correctIndex: 1, quizId: quiz2.id },
     ],
   });
 
-  await prisma.question.createMany({
-    data: [
-      { text: "ما الفرق بين UI وUX؟", options: ["لا فرق، هما نفس الشيء", "UI هو شكل الواجهة، UX هي تجربة المستخدم الكاملة", "UX هو شكل الواجهة، UI هي البرمجة", "UI للموبايل، UX للويب"], correctIndex: 1, quizId: quiz3.id },
-      { text: "ما مبدأ Contrast في التصميم؟", options: ["استخدام نفس اللون في كل مكان", "إبراز العناصر المهمة بجعلها مختلفة بصرياً", "جعل كل العناصر بنفس الحجم", "تقليل عدد الألوان للصفر"], correctIndex: 1, quizId: quiz3.id },
-      { text: "ما قاعدة 60-30-10 في التصميم؟", options: ["توزيع الألوان: 60% لون رئيسي، 30% ثانوي، 10% تمييز", "توزيع الوقت بين التصميم والبرمجة", "نسبة المحتوى للمسافات الفارغة", "عدد الألوان المسموح بها في التصميم"], correctIndex: 0, quizId: quiz3.id },
-      { text: "ما الـ Wireframe؟", options: ["النسخة النهائية من التصميم", "مخطط هيكلي بسيط يوضح تخطيط الصفحة", "كود HTML للصفحة", "أنيميشن للواجهة"], correctIndex: 1, quizId: quiz3.id },
-      { text: "ما مبدأ Gestalt في التصميم؟", options: ["استخدام الصور فقط بدون نصوص", "كيفية إدراك الدماغ للعناصر البصرية كمجموعات", "طريقة ترميز الألوان", "نوع من أنواع الـ Typography"], correctIndex: 1, quizId: quiz3.id },
-      { text: "ما أفضل حجم للنص الأساسي (body text) على الويب؟", options: ["10-12px", "16-18px", "24-28px", "8-10px"], correctIndex: 1, quizId: quiz3.id },
-    ],
-  });
+  console.log("❓ Created 14 questions across 2 quizzes");
 
-  console.log("❓ Created 24 questions across 3 quizzes");
-
-  // ─── 7. Enrollments ───────────────────────────────────────────────
+  // ─── 14. Enrollments ──────────────────────────────────────────────
   await prisma.enrollment.createMany({
     data: [
-      { studentId: student1.id, courseId: course1.id, progress: 80, status: EnrollmentStatus.ACTIVE },
-      { studentId: student1.id, courseId: course2.id, progress: 40, status: EnrollmentStatus.ACTIVE },
-      { studentId: student2.id, courseId: course1.id, progress: 100, status: EnrollmentStatus.COMPLETED },
-      { studentId: student2.id, courseId: course3.id, progress: 60, status: EnrollmentStatus.ACTIVE },
+      { tenantId: tenant1.id, studentId: student1.id, courseId: course1.id, progress: 80,  status: EnrollmentStatus.ACTIVE    },
+      { tenantId: tenant1.id, studentId: student1.id, courseId: course2.id, progress: 40,  status: EnrollmentStatus.ACTIVE    },
+      { tenantId: tenant1.id, studentId: student2.id, courseId: course1.id, progress: 100, status: EnrollmentStatus.COMPLETED },
+      { tenantId: tenant2.id, studentId: student3.id, courseId: course3.id, progress: 60,  status: EnrollmentStatus.ACTIVE    },
     ],
   });
 
   console.log("🎓 Created 4 enrollments");
 
-  // ─── 8. Quiz Attempts ─────────────────────────────────────────────
+  // ─── 15. Quiz Attempts ────────────────────────────────────────────
   await prisma.quizAttempt.createMany({
     data: [
-      { studentId: student1.id, quizId: quiz1.id, score: 70, submittedAt: new Date() },
-      { studentId: student2.id, quizId: quiz1.id, score: 90, submittedAt: new Date() },
+      { tenantId: tenant1.id, studentId: student1.id, quizId: quiz1.id, score: 70, submittedAt: new Date() },
+      { tenantId: tenant1.id, studentId: student2.id, quizId: quiz1.id, score: 90, submittedAt: new Date() },
     ],
   });
 
   console.log("📊 Created 2 quiz attempts");
 
-  // ─── 9. Certificates ──────────────────────────────────────────────
-  // FIX DB-02: include examName, institutionName, facultyName
+  // ─── 16. Certificates ─────────────────────────────────────────────
   await prisma.certificate.create({
     data: {
-      studentId: student2.id,
-      courseId: course1.id,
-      issuedAt: new Date(),
-      examName: "اختبار أساسيات JavaScript",
-      institutionName: "EduSaaS",
-      facultyName: "Online Learning",
+      tenantId:        tenant1.id,
+      studentId:       student2.id,
+      courseId:        course1.id,
+      issuedAt:        new Date(),
+      examName:        "اختبار أساسيات JavaScript",
+      institutionName: "EduSaaS Academy",
+      facultyName:     "Online Learning",
     },
   });
 
@@ -243,21 +374,30 @@ async function main() {
 
   // ─── Summary ──────────────────────────────────────────────────────
   console.log("\n✅ Seed completed successfully!");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("👥 Users       : 5  (admin / 2 teachers / 2 students)");
-  console.log("📚 Courses     : 4  (3 published, 1 draft)");
-  console.log("🎬 Lessons     : 12");
-  console.log("📝 Quizzes     : 3");
-  console.log("❓ Questions   : 24");
-  console.log("🎓 Enrollments : 4");
-  console.log("📊 Attempts    : 2");
-  console.log("🏆 Certificates: 1");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("\n🔑 Test credentials (all users):");
-  console.log("   Password: password123");
-  console.log("   Admin  : admin@edusaas.com");
-  console.log("   Teacher: ahmed@edusaas.com / sara@edusaas.com");
-  console.log("   Student: omar@edusaas.com  / nour@edusaas.com");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("💳 Plans        : 2  (Basic, Golden)");
+  console.log("🏫 Tenants      : 2  (EduSaaS Academy, Design School)");
+  console.log("👑 SuperAdmin   : 1");
+  console.log("👥 Users        : 5  (2 admins, 2 teachers, 3 students) + SuperAdmin");
+  console.log("📚 Courses      : 3  (2 في Tenant1, 1 في Tenant2)");
+  console.log("🎬 Lessons      : 11");
+  console.log("📝 Quizzes      : 2");
+  console.log("❓ Questions    : 14");
+  console.log("🎓 Enrollments  : 4");
+  console.log("📊 Attempts     : 2");
+  console.log("🏆 Certificates : 1");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("\n🔑 Test credentials (password: password123)");
+  console.log("   SuperAdmin : superadmin@platform.com");
+  console.log("   ── Tenant 1: EduSaaS Academy ──────────────");
+  console.log("   Admin      : ahmed@edusaas-academy.com");
+  console.log("   Teacher    : mohamed@edusaas-academy.com");
+  console.log("   Student    : omar@edusaas-academy.com");
+  console.log("   Student    : nour@edusaas-academy.com");
+  console.log("   ── Tenant 2: Design School ─────────────────");
+  console.log("   Admin      : sara@design-school.com");
+  console.log("   Teacher    : layla@design-school.com");
+  console.log("   Student    : youssef@design-school.com");
 }
 
 main()

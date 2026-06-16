@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -12,6 +12,7 @@ import { CertificatesModule } from './modules/certificates/certificates.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { SessionAuthGuard } from './common/guards/session-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { TenantMiddleware } from './common/middleware/tenant.middleware';
 
 @Module({
   imports: [
@@ -41,4 +42,10 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(TenantMiddleware)
+      .forRoutes('*'); // applies to all routes
+  }
+}

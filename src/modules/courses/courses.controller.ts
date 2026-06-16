@@ -28,36 +28,37 @@ export class CoursesController {
     @Query('limit') limit = '10',
     @Query('search') search?: string,
     @Query('category') category?: string,
+    @GetUser() user?: any,
   ) {
-    return this.coursesService.findAll(+page, +limit, search, category);
+    const tenantId = user?.tenantId ?? null;
+    return this.coursesService.findAll(tenantId, +page, +limit, search, category);
   }
 
-  // ── Admin يشوف كل الكورسات حتى DRAFT ──
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @Get('admin/all')
   findAllAdmin(
     @Query('page') page = '1',
     @Query('limit') limit = '10',
+    @GetUser() user: any,
   ) {
-    return this.coursesService.findAllAdmin(+page, +limit);
+    return this.coursesService.findAllAdmin(user.tenantId, +page, +limit);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Get('teacher/my-courses')
   getMyCourses(@GetUser() user: any) {
-    return this.coursesService.findByInstructor(user.id);
+    return this.coursesService.findByInstructor(user.tenantId, user.id);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Get('teacher/stats')
   getTeacherStats(@GetUser() user: any) {
-    return this.coursesService.getTeacherStats(user.id);
+    return this.coursesService.getTeacherStats(user.tenantId, user.id);
   }
 
-  // QE-02: أضفنا page و limit عشان مش نجيب كل الطلاب دفعة واحدة
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Get('teacher/students')
@@ -66,14 +67,14 @@ export class CoursesController {
     @Query('page') page = '1',
     @Query('limit') limit = '20',
   ) {
-    return this.coursesService.getTeacherStudents(user.id, +page, +limit);
+    return this.coursesService.getTeacherStudents(user.tenantId, user.id, +page, +limit);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @Get('admin/stats')
-  getAdminStats() {
-    return this.coursesService.getAdminStats();
+  getAdminStats(@GetUser() user: any) {
+    return this.coursesService.getAdminStats(user.tenantId);
   }
 
   @Public()
@@ -86,7 +87,7 @@ export class CoursesController {
   @Roles(Role.TEACHER, Role.ADMIN)
   @Post()
   create(
-    @GetUser('id') userId: string,
+    @GetUser() user: any,
     @Body() body: {
       title: string;
       description: string;
@@ -96,14 +97,20 @@ export class CoursesController {
       videoUrl?: string;
     },
   ) {
-    return this.coursesService.create({ ...body, instructorId: userId });
+    return this.coursesService.create({
+      ...body,
+      tenantId: user.tenantId,
+      instructorId: user.id,
+    });
   }
 
+  // AUTH-02: إضافة Guard على PUT :id — كان مفيش حماية خالص
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
   @Put(':id')
   update(
     @Param('id') id: string,
-    @GetUser('id') userId: string,
-    @GetUser('role') userRole: string,
+    @GetUser() user: any,
     @Body() body: {
       title?: string;
       description?: string;
@@ -113,7 +120,7 @@ export class CoursesController {
       status?: CourseStatus;
     },
   ) {
-    return this.coursesService.update(id, userId, userRole, body);
+    return this.coursesService.update(id, user.id, user.role, body);
   }
 
   @UseGuards(RolesGuard)
@@ -126,8 +133,6 @@ export class CoursesController {
     return this.coursesService.updateStatus(id, body.status as CourseStatus);
   }
 
-  // BL-06: soft delete — بدل ما نمسح الكورس ونضيع بيانات الطلاب
-  // بنحوله لـ ARCHIVED وبيفضل موجود في الـ DB
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.TEACHER)
   @Patch(':id/archive')
@@ -135,7 +140,6 @@ export class CoursesController {
     return this.coursesService.archive(id);
   }
 
-  // BL-06: الـ delete دلوقتي بيرفض لو الكورس PUBLISHED أو عنده طلاب
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.TEACHER)
   @Delete(':id')

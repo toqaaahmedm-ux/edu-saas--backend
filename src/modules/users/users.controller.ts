@@ -47,10 +47,12 @@ export class UsersController {
   @Roles(Role.ADMIN)
   @Get('admin/users')
   findAll(
+    @GetUser() user: any,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
   ) {
-    return this.usersService.findAll(+page, +limit);
+    // بنمرر (tenantId, page, limit)
+    return this.usersService.findAll(user.tenantId, +page, +limit);
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
@@ -58,9 +60,10 @@ export class UsersController {
   @Delete('admin/users/:id')
   delete(
     @Param('id') id: string,
-    @GetUser('id') requestUserId: string,
+    @GetUser() user: any,
   ) {
-    return this.usersService.delete(id, requestUserId);
+    //  بنمرر (tenantId, id, requestUserId)
+    return this.usersService.delete(user.tenantId, id, user.id);
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
@@ -68,9 +71,9 @@ export class UsersController {
   @Patch('admin/users/:id/role')
   updateRole(
     @Param('id') id: string,
-    @GetUser('id') requestUserId: string,
+    @GetUser() user: any,
     @Body() body: { role: Role },
   ) {
-    return this.usersService.updateRole(id, body.role, requestUserId);
+    return this.usersService.updateRole(id, body.role, user.id);
   }
 }
