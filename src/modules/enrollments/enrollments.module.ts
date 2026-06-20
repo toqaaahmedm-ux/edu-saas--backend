@@ -4,9 +4,11 @@ import { EnrollmentsController } from './enrollments.controller';
 import { EnrollmentsRepository } from './enrollments.repository';
 import { CoursesRepository } from '../courses/courses.repository';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { BillingModule } from '../billing/billing.module';
+import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, BillingModule, PrismaModule],
   controllers: [EnrollmentsController],
   providers: [EnrollmentsService, EnrollmentsRepository, CoursesRepository],
 })

@@ -15,38 +15,35 @@ import { UploadService } from './upload.service';
 @Controller('upload')
 @UseGuards(SessionAuthGuard, RolesGuard)
 export class UploadController {
-  constructor(private readonly uploadService: UploadService) { }
+  constructor(private readonly uploadService: UploadService) {}
 
   @Post('course-image')
   @Roles('TEACHER', 'ADMIN')
   @UseInterceptors(FileInterceptor('image', { storage: memoryStorage() }))
   @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: { image: { type: 'string', format: 'binary' } },
-    },
-  })
+  @ApiBody({ schema: { type: 'object', properties: { image: { type: 'string', format: 'binary' } } } })
   async uploadCourseImage(@UploadedFile() file: Express.Multer.File) {
     const url = await this.uploadService.uploadCourseImage(file);
-    // INT-02: شلنا الـ manual wrap — TransformInterceptor هيلفه تلقائياً
-    // النتيجة: { success: true, data: { url } } ✅
     return { url };
   }
 
+  // FEAT-05: بيرجع url + hlsUrl + publicId
   @Post('course-video')
   @Roles('TEACHER', 'ADMIN')
   @UseInterceptors(FileInterceptor('video', { storage: memoryStorage() }))
   @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: { video: { type: 'string', format: 'binary' } },
-    },
-  })
+  @ApiBody({ schema: { type: 'object', properties: { video: { type: 'string', format: 'binary' } } } })
   async uploadCourseVideo(@UploadedFile() file: Express.Multer.File) {
-    const url = await this.uploadService.uploadCourseVideo(file);
-    // INT-02: شلنا الـ manual wrap
-    return { url };
+    return this.uploadService.uploadCourseVideo(file);
+  }
+
+  // FEAT-06: رفع المستندات (PDF, DOCX, PPTX)
+  @Post('document')
+  @Roles('TEACHER', 'ADMIN')
+  @UseInterceptors(FileInterceptor('document', { storage: memoryStorage() }))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { document: { type: 'string', format: 'binary' } } } })
+  async uploadDocument(@UploadedFile() file: Express.Multer.File) {
+    return this.uploadService.uploadDocument(file);
   }
 }

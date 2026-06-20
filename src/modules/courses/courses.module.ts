@@ -6,9 +6,10 @@ import { LessonsController } from './lessons.controller';
 import { LessonsService } from './lessons.service';
 import { LessonsRepository } from './lessons.repository';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, BillingModule],
   controllers: [CoursesController, LessonsController],
   providers: [
     CoursesService, CoursesRepository,

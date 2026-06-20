@@ -15,11 +15,12 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { RequireFeature } from '../../common/decorators/require-feature.decorator';
 import { Role, CourseStatus } from '@prisma/client';
 
 @Controller('courses')
 export class CoursesController {
-  constructor(private readonly coursesService: CoursesService) {}
+  constructor(private readonly coursesService: CoursesService) { }
 
   @Public()
   @Get()
@@ -57,6 +58,15 @@ export class CoursesController {
   @Get('teacher/stats')
   getTeacherStats(@GetUser() user: any) {
     return this.coursesService.getTeacherStats(user.tenantId, user.id);
+  }
+
+  // FEAT-XX: محمية بفيتشر ANALYTICS — لازم الـ tenant يكون عنده الفيتشر مفعّلة في خطته
+  @RequireFeature('ANALYTICS')
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Get('teacher/analytics')
+  getTeacherAnalytics(@GetUser() user: any) {
+    return this.coursesService.getTeacherAnalytics(user.tenantId, user.id);
   }
 
   @UseGuards(RolesGuard)

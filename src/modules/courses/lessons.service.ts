@@ -15,21 +15,24 @@ export class LessonsService {
     const course = await this.coursesRepository.findById(courseId);
     if (!course) throw new NotFoundException('Course not found');
 
-    // ADMIN و TEACHER صاحب الكورس يشوفوا بدون تسجيل
     const isAdmin = userRole === 'ADMIN';
     const isInstructor = course.instructorId === userId;
 
-    if (!isAdmin && !isInstructor) {
-      // التحقق من التسجيل للطالب
-      const enrollment = await this.prisma.enrollment.findUnique({
-        where: { studentId_courseId: { studentId: userId, courseId } },
-      });
-      if (!enrollment) {
-        throw new ForbiddenException('You must be enrolled in this course to view lessons');
-      }
+    if (isAdmin || isInstructor) {
+      // المدرس والأدمن يشوفوا كل الدروس بما فيها المجدولة مستقبلاً
+      return this.lessonsRepository.findByCourseId(courseId);
     }
 
-    return this.lessonsRepository.findByCourseId(courseId);
+    // الطالب — لازم يكون enrolled
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId: userId, courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in this course to view lessons');
+    }
+
+    // FEAT-03: الطالب يشوف الدروس المتاحة بس (availableAt <= now أو null)
+    return this.lessonsRepository.findAvailableByCourseId(courseId);
   }
 
   async create(courseId: string, userId: string, userRole: string, data: {
@@ -37,6 +40,7 @@ export class LessonsService {
     videoUrl?: string;
     duration?: number;
     order: number;
+    availableAt?: string | null; // FEAT-03: ISO string من الفرونت
   }) {
     const course = await this.coursesRepository.findById(courseId);
     if (!course) throw new NotFoundException('Course not found');
@@ -45,7 +49,11 @@ export class LessonsService {
       throw new ForbiddenException('You do not own this course');
     }
 
-    return this.lessonsRepository.create({ ...data, courseId });
+    return this.lessonsRepository.create({
+      ...data,
+      courseId,
+      availableAt: data.availableAt ? new Date(data.availableAt) : null,
+    });
   }
 
   async update(id: string, userId: string, userRole: string, data: {
@@ -53,6 +61,7 @@ export class LessonsService {
     videoUrl?: string;
     duration?: number;
     order?: number;
+    availableAt?: string | null; // FEAT-03
   }) {
     const lesson = await this.lessonsRepository.findById(id);
     if (!lesson) throw new NotFoundException('Lesson not found');
@@ -62,7 +71,13 @@ export class LessonsService {
       throw new ForbiddenException('You do not own this course');
     }
 
-    return this.lessonsRepository.update(id, data);
+    const { availableAt, ...rest } = data;
+    return this.lessonsRepository.update(id, {
+      ...rest,
+      ...(availableAt !== undefined && {
+        availableAt: availableAt ? new Date(availableAt) : null,
+      }),
+    });
   }
 
   async delete(id: string, userId: string, userRole: string) {

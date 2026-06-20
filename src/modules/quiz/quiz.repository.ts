@@ -48,34 +48,27 @@ export class QuizRepository {
 
   async findCompletedAttempt(studentId: string, quizId: string) {
     return this.prisma.quizAttempt.findFirst({
-      where: {
-        studentId,
-        quizId,
-        submittedAt: { not: null },
-      },
+      where: { studentId, quizId, submittedAt: { not: null } },
     });
   }
 
-  // Multi-tenant: لازم tenantId في الـ create
+  // FEAT-07: جيب كل المحاولات المكتملة
+  async findAllCompletedAttempts(studentId: string, quizId: string) {
+    return this.prisma.quizAttempt.findMany({
+      where: { studentId, quizId, submittedAt: { not: null } },
+      orderBy: { submittedAt: 'desc' },
+    });
+  }
+
   async createAttempt(tenantId: string, studentId: string, quizId: string) {
     return this.prisma.quizAttempt.create({
-      data: {
-        tenantId,
-        studentId,
-        quizId,
-        score: 0,
-        startedAt: new Date(),
-      },
+      data: { tenantId, studentId, quizId, score: 0, startedAt: new Date() },
     });
   }
 
   async deleteIncompleteAttempt(studentId: string, quizId: string) {
     await this.prisma.quizAttempt.deleteMany({
-      where: {
-        studentId,
-        quizId,
-        submittedAt: null,
-      },
+      where: { studentId, quizId, submittedAt: null },
     });
   }
 

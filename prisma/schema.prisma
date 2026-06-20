@@ -10,9 +10,9 @@ generator client {
 
 // ─── Enums ───────────────────────────────────────────
 enum Role {
-  SUPER_ADMIN  // Platform owner — tenantId = null
-  ADMIN        // Tenant Admin (Teacher/Owner)
-  TEACHER      // Tenant Staff — Instructor
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
   STUDENT
 }
 
@@ -41,25 +41,22 @@ enum BillingCycle {
   ANNUAL
 }
 
-// ─── Platform Plane — Multi-Tenancy Core ─────────────
+// ─── Platform Plane ───────────────────────────────────
 
-// FR-PA-01, FR-PA-02: tenant record
 model Tenant {
   id            String       @id @default(uuid())
   name          String
-  subdomain     String       @unique  // e.g. "school1" -> school1.platform.com
-  customDomain  String?      @unique  // Golden/Enterprise feature
+  subdomain     String       @unique
+  customDomain  String?      @unique
   status        TenantStatus @default(TRIAL)
   ownerUserId   String?      @unique
   planId        String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  plan          Plan?         @relation(fields: [planId], references: [id])
-  owner         User?         @relation("TenantOwner", fields: [ownerUserId], references: [id])
-
-  // Tenant-scoped data
-  users         User[]        @relation("TenantUsers")
+  plan          Plan?          @relation(fields: [planId], references: [id])
+  owner         User?          @relation("TenantOwner", fields: [ownerUserId], references: [id])
+  users         User[]         @relation("TenantUsers")
   courses       Course[]
   enrollments   Enrollment[]
   quizAttempts  QuizAttempt[]
@@ -71,20 +68,18 @@ model Tenant {
   @@index([status])
 }
 
-// FR-PA-05, FR-PA-06: subscription plans + feature entitlements
 model Plan {
   id           String       @id @default(uuid())
-  name         String       @unique // "Basic" | "Golden" | "Enterprise"
+  name         String       @unique
   billingCycle BillingCycle @default(MONTHLY)
   price        Decimal      @default(0) @db.Decimal(10, 2)
   currency     String       @default("EGP")
   isArchived   Boolean      @default(false)
 
-  // Quantitative limits (FR-PA-06)
-  maxStudents     Int @default(50)
-  maxCourses      Int @default(10)
-  maxStorageGb    Int @default(5)
-  maxLiveHours    Int @default(0)
+  maxStudents  Int @default(50)
+  maxCourses   Int @default(10)
+  maxStorageGb Int @default(5)
+  maxLiveHours Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -94,28 +89,26 @@ model Plan {
   subscriptions Subscription[]
 }
 
-// FR-PA-06: feature flags per plan (Quizzes, LiveLectures, Certificates, etc.)
 model PlanFeature {
   id         String  @id @default(uuid())
   planId     String
-  featureKey String  // e.g. "QUIZZES" | "LIVE_LECTURES" | "CERTIFICATES" | "CUSTOM_DOMAIN"
+  featureKey String
   enabled    Boolean @default(false)
-  limitValue Int?    // optional numeric limit override for this feature
+  limitValue Int?
 
   plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@unique([planId, featureKey])
 }
 
-// FR-PA-10/11: subscription + billing record
 model Subscription {
   id                 String   @id @default(uuid())
   tenantId           String
   planId             String
-  status             String   @default("ACTIVE") // ACTIVE | PAST_DUE | CANCELLED
+  status             String   @default("ACTIVE")
   currentPeriodStart DateTime @default(now())
   currentPeriodEnd   DateTime
-  gatewayRef         String?  // payment gateway subscription id
+  gatewayRef         String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -126,14 +119,13 @@ model Subscription {
   @@index([tenantId])
 }
 
-// FR-PA-11: invoices
 model Invoice {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   subscriptionId String
-  amount         Decimal  @db.Decimal(10, 2)
-  currency       String   @default("EGP")
-  status         String   @default("PENDING") // PENDING | PAID | FAILED
-  issuedAt       DateTime @default(now())
+  amount         Decimal   @db.Decimal(10, 2)
+  currency       String    @default("EGP")
+  status         String    @default("PENDING")
+  issuedAt       DateTime  @default(now())
   paidAt         DateTime?
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
@@ -141,10 +133,9 @@ model Invoice {
   @@index([subscriptionId])
 }
 
-// FR-PA-16: global + tenant audit logs
 model AuditLog {
   id        String   @id @default(uuid())
-  tenantId  String?  // nullable — platform-level actions have no tenant
+  tenantId  String?
   actorId   String?
   action    String
   target    String?
@@ -158,11 +149,10 @@ model AuditLog {
   @@index([actorId])
 }
 
-// ─── Core Models (now tenant-scoped) ─────────────────
+// ─── Core Models ─────────────────────────────────────
+
 model User {
   id             String   @id @default(uuid())
-  // tenantId is NULL for SUPER_ADMIN / platform staff.
-  // All ADMIN/TEACHER/STUDENT users belong to exactly one tenant.
   tenantId       String?
   name           String
   email          String
@@ -172,8 +162,8 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant         Tenant?       @relation("TenantUsers", fields: [tenantId], references: [id], onDelete: Cascade)
-  ownedTenant    Tenant?       @relation("TenantOwner")
+  tenant      Tenant?       @relation("TenantUsers", fields: [tenantId], references: [id], onDelete: Cascade)
+  ownedTenant Tenant?       @relation("TenantOwner")
 
   courses       Course[]
   enrollments   Enrollment[]
@@ -183,8 +173,6 @@ model User {
   notifications Notification[]
   auditLogs     AuditLog[]
 
-  // FR-X-01: email unique PER TENANT, not globally
-  // (two different schools can each have a user with the same email)
   @@unique([tenantId, email])
   @@index([tenantId])
 }
@@ -216,14 +204,15 @@ model Course {
 }
 
 model Lesson {
-  id        String   @id @default(uuid())
-  title     String
-  videoUrl  String?
-  duration  Int      @default(0)
-  order     Int      @default(0)
-  courseId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(uuid())
+  title       String
+  videoUrl    String?
+  duration    Int       @default(0)
+  order       Int       @default(0)
+  courseId    String
+  availableAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
@@ -291,7 +280,7 @@ model QuizAttempt {
   student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   quiz    Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
-  @@unique([studentId, quizId])
+  // FEAT-07: شيلنا @@unique عشان نسمح بمحاولات متعددة (max 3)
   @@index([tenantId])
   @@index([studentId, quizId])
 }
