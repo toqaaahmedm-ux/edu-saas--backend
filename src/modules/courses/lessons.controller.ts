@@ -13,7 +13,7 @@ export class LessonsController {
   getLessons(
     @Param('courseId') courseId: string,
     @GetUser('id') userId: string,
-    @GetUser('role') userRole: string,   // ← أضفنا
+    @GetUser('role') userRole: string,
   ) {
     return this.lessonsService.getLessons(courseId, userId, userRole);
   }
@@ -30,6 +30,7 @@ export class LessonsController {
       videoUrl?: string;
       duration?: number;
       order: number;
+      availableAt?: string | null; // FEAT-03: ISO date string e.g. "2026-07-01T00:00:00Z"
     },
   ) {
     return this.lessonsService.create(courseId, userId, userRole, body);
@@ -47,6 +48,7 @@ export class LessonsController {
       videoUrl?: string;
       duration?: number;
       order?: number;
+      availableAt?: string | null; // FEAT-03
     },
   ) {
     return this.lessonsService.update(lessonId, userId, userRole, body);

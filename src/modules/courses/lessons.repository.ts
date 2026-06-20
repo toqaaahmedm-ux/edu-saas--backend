@@ -12,12 +12,28 @@ export class LessonsRepository {
     });
   }
 
+  // FEAT-03: بيرجع الدروس المتاحة بس (availableAt <= now أو null)
+  findAvailableByCourseId(courseId: string) {
+    const now = new Date();
+    return this.prisma.lesson.findMany({
+      where: {
+        courseId,
+        OR: [
+          { availableAt: null },
+          { availableAt: { lte: now } },
+        ],
+      },
+      orderBy: { order: 'asc' },
+    });
+  }
+
   create(data: {
     title: string;
     videoUrl?: string;
     duration?: number;
     order: number;
     courseId: string;
+    availableAt?: Date | null; // FEAT-03
   }) {
     return this.prisma.lesson.create({ data });
   }
@@ -27,6 +43,7 @@ export class LessonsRepository {
     videoUrl?: string;
     duration?: number;
     order?: number;
+    availableAt?: Date | null; // FEAT-03
   }) {
     return this.prisma.lesson.update({ where: { id }, data });
   }

@@ -127,16 +127,57 @@ export class CoursesService {
       0,
     );
 
-    // ✅ FIX: عدد حقيقي من الـ DB بدل hardcoded 0
     const activeQuizzes = await this.prisma.quiz.count({
       where: { courseId: { in: courseIds } },
     });
 
-    // ✅ FIX: avgRating محذوفة — مفيش Rating model في الـ schema
     return {
       totalStudents,
       publishedCourses,
       activeQuizzes,
+    };
+  }
+
+  // ✅ NEW: بيانات الـ analytics الحقيقية بدل /api/analytics في Next.js
+  async getTeacherAnalytics(tenantId: string, instructorId: string) {
+    const courses = await this.coursesRepository.findByInstructor(tenantId, instructorId);
+    const courseIds = courses.map((c) => c.id);
+
+    const attempts = await this.prisma.quizAttempt.findMany({
+      where: {
+        tenantId,
+        quiz: { courseId: { in: courseIds } },
+        submittedAt: { not: null },
+      },
+      select: { score: true, submittedAt: true },
+      orderBy: { submittedAt: 'asc' },
+    });
+
+    const excellent = attempts.filter((a) => a.score >= 85).length;
+    const good      = attempts.filter((a) => a.score >= 60 && a.score < 85).length;
+    const needsWork = attempts.filter((a) => a.score < 60).length;
+
+    const monthlyMap: Record<string, { total: number; count: number }> = {};
+    attempts.forEach((a) => {
+      if (!a.submittedAt) return;
+      const month = new Date(a.submittedAt).toLocaleString('en', { month: 'short' });
+      if (!monthlyMap[month]) monthlyMap[month] = { total: 0, count: 0 };
+      monthlyMap[month].total += a.score;
+      monthlyMap[month].count += 1;
+    });
+
+    const performanceTrend = Object.entries(monthlyMap).map(([month, { total, count }]) => ({
+      month,
+      score: Math.round(total / count),
+    }));
+
+    return {
+      performanceTrend: performanceTrend.length > 0 ? performanceTrend : [{ month: 'No data', score: 0 }],
+      quizDistribution: [
+        { name: 'Excellent',         value: excellent },
+        { name: 'Good',              value: good },
+        { name: 'Needs Improvement', value: needsWork },
+      ],
     };
   }
 

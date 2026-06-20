@@ -8,6 +8,8 @@
 import { EnrollmentsRepository } from './enrollments.repository';
 import { CoursesRepository } from '../courses/courses.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BillingService } from '../billing/billing.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class EnrollmentsService {
@@ -15,6 +17,8 @@ export class EnrollmentsService {
     private readonly enrollmentsRepository: EnrollmentsRepository,
     private readonly coursesRepository: CoursesRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly billingService: BillingService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async enroll(tenantId: string, studentId: string, courseId: string) {
@@ -36,10 +40,25 @@ export class EnrollmentsService {
     const existing = await this.enrollmentsRepository.findByStudentAndCourse(studentId, courseId);
     if (existing) throw new ConflictException('Already enrolled');
 
+    // FEAT-04: التحقق من حد الطلاب في خطة الـ tenant
+    const subscription = await this.billingService.getTenantSubscription(tenantId);
+    if (subscription) {
+      const maxStudents = subscription.plan.maxStudents;
+      const currentStudents = await this.prisma.enrollment.count({
+        where: { tenantId },
+      });
+      if (currentStudents >= maxStudents) {
+        throw new ForbiddenException(
+          `Student limit reached (${maxStudents}). Please upgrade your plan.`,
+        );
+      }
+    }
+
     const enrollment = await this.enrollmentsRepository.create(tenantId, studentId, courseId);
 
     await this.notificationsService.createNotification({
       userId: studentId,
+      tenantId,
       title: 'تم التسجيل بنجاح! 🎉',
       message: `تم تسجيلك في كورس "${course.title}"`,
       type: 'ENROLLMENT',
