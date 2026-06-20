@@ -1,4 +1,3 @@
-// src/modules/certificates/certificates.repository.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -6,13 +5,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class CertificatesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByStudentId(studentId: string) {
+  async findByStudentId(tenantId: string, studentId: string) {
     return this.prisma.certificate.findMany({
-      where: { studentId },
+      where: { tenantId, studentId },
       include: {
-        course: {
-          select: { id: true, title: true },
-        },
+        course: { select: { id: true, title: true } },
       },
       orderBy: { issuedAt: 'desc' },
     });
@@ -29,12 +26,13 @@ export class CertificatesRepository {
   }
 
   async findByStudentAndCourse(studentId: string, courseId: string) {
-    return this.prisma.certificate.findFirst({
-      where: { studentId, courseId },
+    return this.prisma.certificate.findUnique({
+      where: { studentId_courseId: { studentId, courseId } },
     });
   }
 
   async create(data: {
+    tenantId: string;
     studentId: string;
     courseId: string;
     examName: string;
@@ -43,8 +41,12 @@ export class CertificatesRepository {
   }) {
     return this.prisma.certificate.create({
       data: {
-        studentId: data.studentId,
-        courseId: data.courseId,
+        tenantId:        data.tenantId,
+        studentId:       data.studentId,
+        courseId:        data.courseId,
+        examName:        data.examName,
+        institutionName: data.institutionName,
+        facultyName:     data.facultyName,
       },
     });
   }

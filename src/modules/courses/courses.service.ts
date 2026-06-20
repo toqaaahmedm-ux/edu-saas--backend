@@ -5,15 +5,18 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { CoursesRepository } from './courses.repository';
+import { PrismaService } from '../../prisma/prisma.service';
 import { CourseStatus } from '@prisma/client';
 
 @Injectable()
 export class CoursesService {
-  constructor(private readonly coursesRepository: CoursesRepository) {}
+  constructor(
+    private readonly coursesRepository: CoursesRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  // QE-03: الـ pagination بتتعمل في الـ DB مش في الـ JS
-  // الكود القديم كان بيجيب كل الكورسات وبعدين يعمل slice
   async findAll(
+    tenantId: string,
     page: number = 1,
     limit: number = 10,
     search?: string,
@@ -21,20 +24,16 @@ export class CoursesService {
   ) {
     const skip = (page - 1) * limit;
     const { courses, total } = await this.coursesRepository.findAllPaginated(
-      skip,
-      limit,
-      search,
-      category,
+      tenantId, skip, limit, search, category,
     );
-
     return {
       courses,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
-  async findAllAdmin(page: number = 1, limit: number = 10) {
-    const allCourses = await this.coursesRepository.findAllAdmin();
+  async findAllAdmin(tenantId: string, page: number = 1, limit: number = 10) {
+    const allCourses = await this.coursesRepository.findAllAdmin(tenantId);
     const total = allCourses.length;
     const start = (page - 1) * limit;
     const courses = allCourses.slice(start, start + limit);
@@ -51,6 +50,7 @@ export class CoursesService {
   }
 
   async create(data: {
+    tenantId: string;
     title: string;
     description: string;
     instructorId: string;
@@ -59,10 +59,8 @@ export class CoursesService {
     price?: number;
   }) {
     if (!data.title?.trim()) throw new BadRequestException('Title is required');
-    if (!data.description?.trim())
-      throw new BadRequestException('Description is required');
-    if (data.price !== undefined && data.price < 0)
-      throw new BadRequestException('Price cannot be negative');
+    if (!data.description?.trim()) throw new BadRequestException('Description is required');
+    if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
     return this.coursesRepository.create(data);
   }
 
@@ -83,8 +81,7 @@ export class CoursesService {
     if (requestUserRole !== 'ADMIN' && course.instructorId !== requestUserId) {
       throw new ForbiddenException('You do not own this course');
     }
-    if (data.price !== undefined && data.price < 0)
-      throw new BadRequestException('Price cannot be negative');
+    if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
     return this.coursesRepository.update(id, data);
   }
 
@@ -93,79 +90,74 @@ export class CoursesService {
     return this.coursesRepository.updateStatus(id, status);
   }
 
-  // BL-06: حماية الـ delete — منع حذف الكورسات المنشورة
-  // الكود القديم كان بيمسح الكورس وكل بيانات الطلاب (enrollments, certificates, quiz attempts)
   async delete(id: string) {
     const course = await this.findById(id);
-
-    // لو الكورس PUBLISHED — ارفض الحذف وحول لـ ARCHIVED
     if (course.status === CourseStatus.PUBLISHED) {
       throw new BadRequestException(
         'Cannot delete a published course. Archive it instead to protect student data.',
       );
     }
-
-    // لو الكورس DRAFT — تحقق إنه مفيش enrollments عليه
     const enrollmentCount = (course as any)._count?.enrollments ?? 0;
     if (enrollmentCount > 0) {
       throw new BadRequestException(
         'Cannot delete a course with enrolled students. Archive it instead.',
       );
     }
-
     await this.coursesRepository.delete(id);
     return { message: 'Course deleted successfully' };
   }
 
-  // BL-06: soft delete — حول الكورس لـ ARCHIVED بدل الحذف الكامل
   async archive(id: string) {
     await this.findById(id);
     return this.coursesRepository.updateStatus(id, CourseStatus.ARCHIVED);
   }
 
-  async findByInstructor(instructorId: string) {
-    return this.coursesRepository.findByInstructor(instructorId);
+  async findByInstructor(tenantId: string, instructorId: string) {
+    return this.coursesRepository.findByInstructor(tenantId, instructorId);
   }
 
-  async getTeacherStats(instructorId: string) {
-    const courses = await this.coursesRepository.findByInstructor(instructorId);
+  async getTeacherStats(tenantId: string, instructorId: string) {
+    const courses = await this.coursesRepository.findByInstructor(tenantId, instructorId);
+    const courseIds = courses.map((c) => c.id);
+
     const publishedCourses = courses.filter((c) => c.status === 'PUBLISHED').length;
-    const totalStudents = courses.reduce((sum, c) => {
-      return sum + ((c as any)._count?.enrollments || 0);
-    }, 0);
+
+    const totalStudents = courses.reduce(
+      (sum, c) => sum + ((c as any)._count?.enrollments || 0),
+      0,
+    );
+
+    // ✅ FIX: عدد حقيقي من الـ DB بدل hardcoded 0
+    const activeQuizzes = await this.prisma.quiz.count({
+      where: { courseId: { in: courseIds } },
+    });
+
+    // ✅ FIX: avgRating محذوفة — مفيش Rating model في الـ schema
     return {
       totalStudents,
       publishedCourses,
-      activeQuizzes: 0,
-      avgRating: 4.8,
+      activeQuizzes,
     };
   }
 
-  // QE-02: أضفنا pagination — الكود القديم كان بيجيب كل الطلاب دفعة واحدة
   async getTeacherStudents(
+    tenantId: string,
     instructorId: string,
     page: number = 1,
     limit: number = 20,
   ) {
-    const courses = await this.coursesRepository.findByInstructor(instructorId);
+    const courses = await this.coursesRepository.findByInstructor(tenantId, instructorId);
     const courseIds = courses.map((c) => c.id);
-
     const skip = (page - 1) * limit;
     return this.coursesRepository.getStudentsByCoursesPaginated(
-      courseIds,
-      skip,
-      limit,
+      tenantId, courseIds, skip, limit,
     );
   }
 
-  async getAdminStats() {
-    const totalCourses = await this.coursesRepository.countAll();
-    const totalStudents = await this.coursesRepository.countStudents();
-    const totalRevenue = await this.coursesRepository.sumRevenue();
-    return {
-      totalCourses,
-      totalStudents,
-      totalRevenue,
-    };
+  async getAdminStats(tenantId: string) {
+    const totalCourses  = await this.coursesRepository.countAll(tenantId);
+    const totalStudents = await this.coursesRepository.countStudents(tenantId);
+    const totalRevenue  = await this.coursesRepository.sumRevenue(tenantId);
+    return { totalCourses, totalStudents, totalRevenue };
   }
 }

@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 
 export type SafeUser = {
   id: string;
+  tenantId: string | null;
   name: string;
   email: string;
   role: Role;
@@ -13,6 +14,7 @@ export type SafeUser = {
 
 const safeUserSelect = {
   id: true,
+  tenantId: true,
   name: true,
   email: true,
   role: true,
@@ -24,16 +26,18 @@ const safeUserSelect = {
 export class UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(page: number, limit: number): Promise<{ users: SafeUser[]; total: number }> {
+  // Multi-tenant: كل query بتفلتر بـ tenantId
+  async findAll(tenantId: string, page: number, limit: number): Promise<{ users: SafeUser[]; total: number }> {
     const skip = (page - 1) * limit;
     const [users, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
+        where: { tenantId },
         skip,
         take: limit,
         select: safeUserSelect,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.user.count(),
+      this.prisma.user.count({ where: { tenantId } }),
     ]);
     return { users, total };
   }
@@ -49,8 +53,11 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+  // Multi-tenant: email unique per tenant — لازم tenantId + email مع بعض
+  async findByEmail(tenantId: string, email: string) {
+    return this.prisma.user.findUnique({
+      where: { tenantId_email: { tenantId, email } },
+    });
   }
 
   async updateProfile(id: string, data: { name?: string }): Promise<SafeUser> {
@@ -80,8 +87,8 @@ export class UsersRepository {
     await this.prisma.user.delete({ where: { id } });
   }
 
-  // ── SEC-03: عدد الـ Admins ──
-  async countByRole(role: Role): Promise<number> {
-    return this.prisma.user.count({ where: { role } });
+  // Multi-tenant: عد الـ users بـ role داخل الـ tenant
+  async countByRole(tenantId: string, role: Role): Promise<number> {
+    return this.prisma.user.count({ where: { tenantId, role } });
   }
 }

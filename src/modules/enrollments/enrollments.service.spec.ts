@@ -3,7 +3,12 @@ import { EnrollmentsService } from './enrollments.service';
 import { EnrollmentsRepository } from './enrollments.repository';
 import { CoursesRepository } from '../courses/courses.repository';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 
 const mockEnrollmentsRepository = {
   findByStudentAndCourse: jest.fn(),
@@ -12,6 +17,7 @@ const mockEnrollmentsRepository = {
   findByCourseId: jest.fn(),
   findById: jest.fn(),
   updateProgress: jest.fn(),
+  updateProgressAndStatus: jest.fn(),
 };
 
 const mockCoursesRepository = {
@@ -22,13 +28,12 @@ const mockNotificationsService = {
   createNotification: jest.fn().mockResolvedValue({}),
 };
 
-// BL-01: الكورس لازم يكون PUBLISHED وسعره 0 عشان التسجيل يشتغل
 const mockCourse = {
   id: 'course-123',
-  title: 'JavaScript Course',
+  title: 'NestJS Course',
+  status: 'PUBLISHED',
+  price: 0,
   instructorId: 'teacher-123',
-  status: 'PUBLISHED',  // ← مطلوب للـ BL-01 check
-  price: 0,             // ← مطلوب للـ BL-01 check
 };
 
 const mockEnrollment = {
@@ -54,7 +59,6 @@ describe('EnrollmentsService', () => {
 
     service = module.get<EnrollmentsService>(EnrollmentsService);
     jest.clearAllMocks();
-    mockNotificationsService.createNotification.mockResolvedValue({});
   });
 
   it('should be defined', () => {
@@ -62,47 +66,94 @@ describe('EnrollmentsService', () => {
   });
 
   describe('enroll', () => {
-    it('يسجل الطالب في الكورس', async () => {
+    it('يسجل الطالب في الكورس بنجاح', async () => {
       mockCoursesRepository.findById.mockResolvedValue(mockCourse);
       mockEnrollmentsRepository.findByStudentAndCourse.mockResolvedValue(null);
       mockEnrollmentsRepository.create.mockResolvedValue(mockEnrollment);
-
-      const result = await service.enroll('student-123', 'course-123');
-
+      const result = await service.enroll('tenant-123', 'student-123', 'course-123');
       expect(result).toEqual(mockEnrollment);
       expect(mockNotificationsService.createNotification).toHaveBeenCalled();
     });
 
     it('يرمي NotFoundException لو الكورس مش موجود', async () => {
       mockCoursesRepository.findById.mockResolvedValue(null);
-      await expect(service.enroll('student-123', 'wrong-id'))
-        .rejects.toThrow(NotFoundException);
+      await expect(service.enroll('tenant-123', 'student-123', 'course-123')).rejects.toThrow(NotFoundException);
     });
 
-    it('يرمي ConflictException لو الطالب مسجل بالفعل', async () => {
-      mockCoursesRepository.findById.mockResolvedValue(mockCourse);
-      mockEnrollmentsRepository.findByStudentAndCourse.mockResolvedValue(mockEnrollment);
-      await expect(service.enroll('student-123', 'course-123'))
-        .rejects.toThrow(ConflictException);
-    });
-
-    // BL-01: tests جديدة للـ checks اللي أضفناها
     it('يرمي BadRequestException لو الكورس مش PUBLISHED', async () => {
       mockCoursesRepository.findById.mockResolvedValue({ ...mockCourse, status: 'DRAFT' });
-      await expect(service.enroll('student-123', 'course-123'))
-        .rejects.toThrow(BadRequestException);
+      await expect(service.enroll('tenant-123', 'student-123', 'course-123')).rejects.toThrow(BadRequestException);
     });
 
     it('يرمي BadRequestException لو الكورس مدفوع', async () => {
-      mockCoursesRepository.findById.mockResolvedValue({ ...mockCourse, price: 99.99 });
-      await expect(service.enroll('student-123', 'course-123'))
-        .rejects.toThrow(BadRequestException);
+      mockCoursesRepository.findById.mockResolvedValue({ ...mockCourse, price: 100 });
+      await expect(service.enroll('tenant-123', 'student-123', 'course-123')).rejects.toThrow(BadRequestException);
     });
 
-    it('يرمي BadRequestException لو المعلم بيسجل في كورسه', async () => {
+    it('يرمي BadRequestException لو المدرس حاول يسجل في كورسه', async () => {
       mockCoursesRepository.findById.mockResolvedValue(mockCourse);
-      await expect(service.enroll('teacher-123', 'course-123'))
-        .rejects.toThrow(BadRequestException);
+      await expect(service.enroll('tenant-123', 'teacher-123', 'course-123')).rejects.toThrow(BadRequestException);
+    });
+
+    it('يرمي ConflictException لو الطالب مسجل مسبقاً', async () => {
+      mockCoursesRepository.findById.mockResolvedValue(mockCourse);
+      mockEnrollmentsRepository.findByStudentAndCourse.mockResolvedValue(mockEnrollment);
+      await expect(service.enroll('tenant-123', 'student-123', 'course-123')).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('getMyEnrollments', () => {
+    it('يرجع enrollments الطالب', async () => {
+      mockEnrollmentsRepository.findByStudentId.mockResolvedValue([mockEnrollment]);
+      const result = await service.getMyEnrollments('tenant-123', 'student-123');
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('getEnrollmentsByCourse', () => {
+    it('يرجع enrollments الكورس', async () => {
+      mockCoursesRepository.findById.mockResolvedValue(mockCourse);
+      mockEnrollmentsRepository.findByCourseId.mockResolvedValue([mockEnrollment]);
+      const result = await service.getEnrollmentsByCourse('tenant-123', 'course-123');
+      expect(result).toHaveLength(1);
+    });
+
+    it('يرمي NotFoundException لو الكورس مش موجود', async () => {
+      mockCoursesRepository.findById.mockResolvedValue(null);
+      await expect(service.getEnrollmentsByCourse('tenant-123', 'not-found')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updateProgress', () => {
+    it('يعدل الـ progress بنجاح', async () => {
+      mockEnrollmentsRepository.findById.mockResolvedValue(mockEnrollment);
+      mockEnrollmentsRepository.updateProgress.mockResolvedValue({ ...mockEnrollment, progress: 50 });
+      const result = await service.updateProgress('enrollment-123', 'student-123', 50);
+      expect(result.progress).toBe(50);
+    });
+
+    it('يحول الـ status لـ COMPLETED لو progress = 100', async () => {
+      mockEnrollmentsRepository.findById.mockResolvedValue(mockEnrollment);
+      mockEnrollmentsRepository.updateProgressAndStatus.mockResolvedValue({
+        ...mockEnrollment, progress: 100, status: 'COMPLETED',
+      });
+      const result = await service.updateProgress('enrollment-123', 'student-123', 100);
+      expect(result.status).toBe('COMPLETED');
+    });
+
+    it('يرمي BadRequestException لو progress خارج النطاق', async () => {
+      await expect(service.updateProgress('enrollment-123', 'student-123', 101)).rejects.toThrow(BadRequestException);
+      await expect(service.updateProgress('enrollment-123', 'student-123', -1)).rejects.toThrow(BadRequestException);
+    });
+
+    it('يرمي NotFoundException لو enrollment مش موجود', async () => {
+      mockEnrollmentsRepository.findById.mockResolvedValue(null);
+      await expect(service.updateProgress('not-found', 'student-123', 50)).rejects.toThrow(NotFoundException);
+    });
+
+    it('يرمي ForbiddenException لو مش صاحب الـ enrollment', async () => {
+      mockEnrollmentsRepository.findById.mockResolvedValue(mockEnrollment);
+      await expect(service.updateProgress('enrollment-123', 'other-user', 50)).rejects.toThrow(ForbiddenException);
     });
   });
 });

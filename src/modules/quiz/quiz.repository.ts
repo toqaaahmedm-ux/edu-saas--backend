@@ -5,10 +5,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class QuizRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAllWithCourse() {
+  async findAllWithCourse(tenantId: string) {
     return this.prisma.quiz.findMany({
+      where: { course: { tenantId } },
       include: {
-        // INT-06: أضفنا id عشان الـ course badge يظهر صح
         course: { select: { id: true, title: true } },
         questions: { select: { id: true } },
       },
@@ -56,9 +56,11 @@ export class QuizRepository {
     });
   }
 
-  async createAttempt(studentId: string, quizId: string) {
+  // Multi-tenant: لازم tenantId في الـ create
+  async createAttempt(tenantId: string, studentId: string, quizId: string) {
     return this.prisma.quizAttempt.create({
       data: {
+        tenantId,
         studentId,
         quizId,
         score: 0,

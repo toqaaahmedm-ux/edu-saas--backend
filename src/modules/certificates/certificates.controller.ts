@@ -21,7 +21,8 @@ export class CertificatesController {
   @Roles(Role.STUDENT)
   @Get('my')
   getMyCertificates(@GetUser() user: any) {
-    return this.certificatesService.getMyCertificates(user.id);
+    // Multi-tenant: بنبعت tenantId من الـ user
+    return this.certificatesService.getMyCertificates(user.tenantId, user.id);
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
@@ -31,10 +32,10 @@ export class CertificatesController {
     @GetUser() user: any,
     @Body() body: { courseId: string; examName?: string; institutionName?: string; facultyName?: string },
   ) {
-    return this.certificatesService.create(user.id, body.courseId, {
-      examName: body.examName || 'General Exam',
+    return this.certificatesService.create(user.tenantId, user.id, body.courseId, {
+      examName:        body.examName        || 'General Exam',
       institutionName: body.institutionName || 'EduSaaS',
-      facultyName: body.facultyName || 'Online Learning',
+      facultyName:     body.facultyName     || 'Online Learning',
     });
   }
 
@@ -56,10 +57,10 @@ export class CertificatesController {
       facultyName: string;
     },
   ) {
-    return this.certificatesService.create(body.studentId, body.courseId, {
-      examName: body.examName,
+    return this.certificatesService.create(user.tenantId, body.studentId, body.courseId, {
+      examName:        body.examName,
       institutionName: body.institutionName,
-      facultyName: body.facultyName,
+      facultyName:     body.facultyName,
     });
   }
 }

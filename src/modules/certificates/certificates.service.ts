@@ -15,8 +15,8 @@ export class CertificatesService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async getMyCertificates(studentId: string) {
-    return this.certificatesRepository.findByStudentId(studentId);
+  async getMyCertificates(tenantId: string, studentId: string) {
+    return this.certificatesRepository.findByStudentId(tenantId, studentId);
   }
 
   async findById(id: string) {
@@ -26,6 +26,7 @@ export class CertificatesService {
   }
 
   async create(
+    tenantId: string,
     studentId: string,
     courseId: string,
     data: {
@@ -54,18 +55,20 @@ export class CertificatesService {
     if (existing) throw new ConflictException('Certificate already issued');
 
     return this.certificatesRepository.create({
+      tenantId,
       studentId,
       courseId,
       ...data,
     });
   }
 
-  // تصدر تلقائياً بعد نجاح الكويز (من quiz.service)
+  // تصدر تلقائياً بعد نجاح الكويز
   async issueIfPassed(
+    tenantId: string,
     studentId: string,
     courseId: string,
     score: number,
-    passingScore: number = 70, // BL-02: المعيار 70 مش 60
+    passingScore: number = 70,
   ) {
     if (score < passingScore) return null;
 
@@ -78,9 +81,10 @@ export class CertificatesService {
       studentId,
       courseId,
     );
-    if (existing) return existing; // already issued — silent skip
+    if (existing) return existing;
 
     return this.certificatesRepository.create({
+      tenantId,
       studentId,
       courseId,
       examName: 'General Exam',

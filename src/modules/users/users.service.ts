@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { UsersRepository } from './users.repository';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -7,16 +12,11 @@ import * as bcrypt from 'bcrypt';
 export class UsersService {
   constructor(private readonly usersRepository: UsersRepository) {}
 
-  async findAll(page: number, limit: number) {
-    const { users, total } = await this.usersRepository.findAll(page, limit);
+  async findAll(tenantId: string, page: number, limit: number) {
+    const { users, total } = await this.usersRepository.findAll(tenantId, page, limit);
     return {
       users,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -47,7 +47,6 @@ export class UsersService {
   }
 
   async updateRole(id: string, role: Role, requestUserId: string) {
-    // ── SEC-03: Admin مش يقدر يغير role نفسه ──
     if (id === requestUserId) {
       throw new ForbiddenException('You cannot change your own role');
     }
@@ -55,17 +54,16 @@ export class UsersService {
     return this.usersRepository.updateRole(id, role);
   }
 
-  async delete(id: string, requestUserId: string) {
-    // ── SEC-03: Admin مش يقدر يحذف نفسه ──
+  async delete(tenantId: string, id: string, requestUserId: string) {
     if (id === requestUserId) {
       throw new ForbiddenException('You cannot delete your own account');
     }
 
     const user = await this.findById(id);
 
-    // ── SEC-03: لو الـ user ده آخر Admin — مش يتحذف ──
+    // SEC-03: لو آخر Admin في الـ tenant — مش يتحذف
     if (user.role === Role.ADMIN) {
-      const adminCount = await this.usersRepository.countByRole(Role.ADMIN);
+      const adminCount = await this.usersRepository.countByRole(tenantId, Role.ADMIN);
       if (adminCount <= 1) {
         throw new ForbiddenException('Cannot delete the last admin');
       }

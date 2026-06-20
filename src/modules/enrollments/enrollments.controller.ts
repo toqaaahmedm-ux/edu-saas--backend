@@ -1,31 +1,35 @@
-import { Controller, Post, Get, Patch, Body, Param, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Body,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { EnrollmentsService } from './enrollments.service';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 
+@UseGuards(SessionAuthGuard)
 @Controller('enrollments')
 export class EnrollmentsController {
-  constructor(private enrollmentsService: EnrollmentsService) {}
+  constructor(private readonly enrollmentsService: EnrollmentsService) {}
 
   @Post()
-  enroll(@Body() body: { courseId: string }, @Req() req: any) {
-    return this.enrollmentsService.enroll(req.user.id, body.courseId);
+  enroll(@Req() req: any, @Body() body: { courseId: string }) {
+    // بنمرر (tenantId, studentId, courseId)
+    return this.enrollmentsService.enroll(req.user.tenantId, req.user.id, body.courseId);
   }
 
   @Get('my')
   getMyEnrollments(@Req() req: any) {
-    return this.enrollmentsService.getMyEnrollments(req.user.id);
+    // بنمرر (tenantId, studentId)
+    return this.enrollmentsService.getMyEnrollments(req.user.tenantId, req.user.id);
   }
 
   @Get('course/:courseId')
-  getByCourse(@Param('courseId') courseId: string) {
-    return this.enrollmentsService.getEnrollmentsByCourse(courseId);
-  }
-
-  @Patch(':id/progress')
-  updateProgress(
-    @Param('id') id: string,
-    @Req() req: any,
-    @Body() body: { progress: number },
-  ) {
-    return this.enrollmentsService.updateProgress(id, req.user.id, body.progress);
+  getEnrollmentsByCourse(@Param('courseId') courseId: string, @Req() req: any) {
+    // بنمرر (tenantId, courseId)
+    return this.enrollmentsService.getEnrollmentsByCourse(req.user.tenantId, courseId);
   }
 }
