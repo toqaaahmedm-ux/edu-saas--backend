@@ -3,6 +3,8 @@ import { EnrollmentsService } from './enrollments.service';
 import { EnrollmentsRepository } from './enrollments.repository';
 import { CoursesRepository } from '../courses/courses.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BillingService } from '../billing/billing.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   NotFoundException,
   ConflictException,
@@ -26,6 +28,29 @@ const mockCoursesRepository = {
 
 const mockNotificationsService = {
   createNotification: jest.fn().mockResolvedValue({}),
+};
+
+// FEAT-04: mock BillingService — بيرجع null عشان مفيش subscription في الـ test
+const mockBillingService = {
+  getTenantSubscription: jest.fn().mockResolvedValue(null),
+};
+
+// ملحوظة CRIT-11: الكود الحقيقي بقى بيستخدم this.prisma.$transaction(async (tx) => {...})
+// عشان يحل race condition على حد الطلاب. فـ $transaction هنا لازم تكون
+// function بتاخد callback وتنده عليه، وتمرر له "tx" — وهو نفسه object
+// فيه enrollment.count و enrollment.create بالظبط زي عميل Prisma العادي.
+const mockTx = {
+  enrollment: {
+    count: jest.fn().mockResolvedValue(0),
+    create: jest.fn(),
+  },
+};
+
+const mockPrismaService = {
+  enrollment: {
+    count: jest.fn().mockResolvedValue(0),
+  },
+  $transaction: jest.fn((callback) => callback(mockTx)),
 };
 
 const mockCourse = {
@@ -54,11 +79,21 @@ describe('EnrollmentsService', () => {
         { provide: EnrollmentsRepository, useValue: mockEnrollmentsRepository },
         { provide: CoursesRepository, useValue: mockCoursesRepository },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: BillingService, useValue: mockBillingService },
+        { provide: PrismaService, useValue: mockPrismaService },
       ],
     }).compile();
 
     service = module.get<EnrollmentsService>(EnrollmentsService);
     jest.clearAllMocks();
+
+    // reset defaults بعد clearAllMocks
+    mockBillingService.getTenantSubscription.mockResolvedValue(null);
+    mockPrismaService.enrollment.count.mockResolvedValue(0);
+    mockPrismaService.$transaction.mockImplementation((callback) => callback(mockTx));
+    mockTx.enrollment.count.mockResolvedValue(0);
+    mockTx.enrollment.create.mockResolvedValue(mockEnrollment);
+    mockNotificationsService.createNotification.mockResolvedValue({});
   });
 
   it('should be defined', () => {
@@ -69,9 +104,12 @@ describe('EnrollmentsService', () => {
     it('يسجل الطالب في الكورس بنجاح', async () => {
       mockCoursesRepository.findById.mockResolvedValue(mockCourse);
       mockEnrollmentsRepository.findByStudentAndCourse.mockResolvedValue(null);
-      mockEnrollmentsRepository.create.mockResolvedValue(mockEnrollment);
+      mockTx.enrollment.create.mockResolvedValue(mockEnrollment);
       const result = await service.enroll('tenant-123', 'student-123', 'course-123');
       expect(result).toEqual(mockEnrollment);
+      expect(mockTx.enrollment.create).toHaveBeenCalledWith({
+        data: { tenantId: 'tenant-123', studentId: 'student-123', courseId: 'course-123' },
+      });
       expect(mockNotificationsService.createNotification).toHaveBeenCalled();
     });
 
@@ -99,6 +137,16 @@ describe('EnrollmentsService', () => {
       mockCoursesRepository.findById.mockResolvedValue(mockCourse);
       mockEnrollmentsRepository.findByStudentAndCourse.mockResolvedValue(mockEnrollment);
       await expect(service.enroll('tenant-123', 'student-123', 'course-123')).rejects.toThrow(ConflictException);
+    });
+
+    it('يرمي ForbiddenException لو الـ tenant وصل حد الطلاب', async () => {
+      mockCoursesRepository.findById.mockResolvedValue(mockCourse);
+      mockEnrollmentsRepository.findByStudentAndCourse.mockResolvedValue(null);
+      mockBillingService.getTenantSubscription.mockResolvedValue({
+        plan: { maxStudents: 5 },
+      });
+      mockTx.enrollment.count.mockResolvedValue(5);
+      await expect(service.enroll('tenant-123', 'student-123', 'course-123')).rejects.toThrow(ForbiddenException);
     });
   });
 

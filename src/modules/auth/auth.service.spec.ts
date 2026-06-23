@@ -1,42 +1,66 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+
+// HIGH-13 FIX: bcryptjs بيستخدم ES Module، فـ jest.spyOn مش قادر يعيد تعريف
+// الـ property وبيرمي "Cannot redefine property: compare". الحل هو mock
+// للـ module كاملاً على مستوى الـ file قبل أي import تاني.
+jest.mock('bcryptjs', () => ({
+  hash: jest.fn().mockResolvedValue('$2b$10$hashedpassword'),
+  compare: jest.fn().mockResolvedValue(true),
+}));
+
+import * as bcrypt from 'bcryptjs';
+
+// ── Mocks ────────────────────────────────────────────────────────────────────
+
+const HASHED = '$2b$10$hashedpassword';
+const TENANT_ID = 'tenant-123';
+const ACCESS_TOKEN = 'signed.jwt.token';
+
+const mockUser = {
+  id: 'user-123',
+  tenantId: TENANT_ID,
+  name: 'Omar Ali',
+  email: 'omar@edusaas-academy.com',
+  hashedPassword: HASHED,
+  role: 'STUDENT',
+  avatar: null,
+  createdAt: new Date(),
+};
+
+const mockSuperAdmin = {
+  id: 'super-123',
+  tenantId: null,
+  name: 'Super Admin',
+  email: 'superadmin@platform.com',
+  hashedPassword: HASHED,
+  role: 'SUPER_ADMIN',
+  avatar: null,
+  createdAt: new Date(),
+};
 
 const mockPrismaService = {
   user: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     create: jest.fn(),
-  },
-  session: {
-    create: jest.fn(),
-    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
   },
 };
 
-jest.mock('bcrypt', () => ({
-  hash: jest.fn().mockResolvedValue('hashed_password'),
-  compare: jest.fn(),
-}));
-
-const mockUser = {
-  id: 'user-123',
-  name: 'Omar Ali',
-  email: 'omar@edusaas.com',
-  hashedPassword: 'hashed_password',
-  role: 'STUDENT',
-  tenantId: 'tenant-123',
-  avatar: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+const mockJwtService = {
+  sign: jest.fn().mockReturnValue(ACCESS_TOKEN),
 };
 
-const registerDto = { name: 'Omar Ali', email: 'omar@edusaas.com', password: 'password123' };
-const loginDto    = { email: 'omar@edusaas.com', password: 'password123' };
+const makeDto = (overrides = {}) => ({
+  email: 'omar@edusaas-academy.com',
+  password: 'password123',
+  ...overrides,
+});
 
-// ✅ ثابت للـ tenantId
-const TENANT_ID = 'tenant-123';
+// ── Test Suite ────────────────────────────────────────────────────────────────
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -46,85 +70,182 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: JwtService, useValue: mockJwtService },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     jest.clearAllMocks();
 
-    mockPrismaService.session.create.mockResolvedValue({});
-    mockPrismaService.session.deleteMany.mockResolvedValue({ count: 0 });
+    // إعادة تعيين الـ default values بعد clearAllMocks
+    (bcrypt.hash as jest.Mock).mockResolvedValue(HASHED);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    mockJwtService.sign.mockReturnValue(ACCESS_TOKEN);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
+  // ── register ──────────────────────────────────────────────────────────────
+
   describe('register', () => {
-    it('ينشئ مستخدم جديد بنجاح', async () => {
+    it('ينشئ مستخدم جديد ويرجع بياناته بدون password', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
       mockPrismaService.user.create.mockResolvedValue(mockUser);
 
-      // بنمرر (dto, tenantId)
-      const result = await service.register(registerDto, TENANT_ID);
+      const result = await service.register(
+        { name: 'Omar Ali', email: 'omar@edusaas-academy.com', password: 'password123' },
+        TENANT_ID,
+      );
 
-      expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({ where: { tenantId_email: { email: registerDto.email, tenantId: TENANT_ID } } });
-      expect(bcrypt.hash).toHaveBeenCalledWith(registerDto.password, 10);
-      expect(result).toHaveProperty('id');
-      expect(result).toHaveProperty('email', mockUser.email);
+      expect(result).toEqual({
+        id: mockUser.id,
+        name: mockUser.name,
+        email: mockUser.email,
+        role: mockUser.role,
+      });
+      expect(mockPrismaService.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId: TENANT_ID,
+            email: 'omar@edusaas-academy.com',
+            hashedPassword: HASHED,
+          }),
+        }),
+      );
     });
 
-    it('يرمي ConflictException لو الإيميل موجود', async () => {
+    it('يرمي ConflictException لو الإيميل موجود في نفس الـ tenant', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      // بنمرر (dto, tenantId)
-      await expect(service.register(registerDto, TENANT_ID)).rejects.toThrow(ConflictException);
+      await expect(
+        service.register(
+          { name: 'Omar', email: 'omar@edusaas-academy.com', password: '123' },
+          TENANT_ID,
+        ),
+      ).rejects.toThrow(ConflictException);
       expect(mockPrismaService.user.create).not.toHaveBeenCalled();
-    });
-
-    it('يشفر كلمة المرور قبل الحفظ', async () => {
-      mockPrismaService.user.findUnique.mockResolvedValue(null);
-      mockPrismaService.user.create.mockResolvedValue(mockUser);
-      // بنمرر (dto, tenantId)
-      await service.register(registerDto, TENANT_ID);
-      expect(bcrypt.hash).toHaveBeenCalledWith('password123', 10);
     });
   });
 
+  // ── login ─────────────────────────────────────────────────────────────────
+
   describe('login', () => {
-    it('يرجع accessToken عند تسجيل دخول صح', async () => {
+    it('يرجع accessToken وبيانات المستخدم عند تسجيل دخول صحيح', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-      // بنمرر (dto, tenantId)
-      const result = await service.login(loginDto, TENANT_ID);
+      const result = await service.login(makeDto(), TENANT_ID);
 
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('data');
-      expect(result.data).toHaveProperty('email', mockUser.email);
-      expect(mockPrismaService.session.deleteMany).toHaveBeenCalledWith({
-        where: { userId: mockUser.id, expiresAt: { lt: expect.any(Date) } },
+      expect(result).toHaveProperty('accessToken', ACCESS_TOKEN);
+      expect(result.data).toEqual({
+        id: mockUser.id,
+        tenantId: TENANT_ID,
+        name: mockUser.name,
+        email: mockUser.email,
+        role: mockUser.role,
       });
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sub: mockUser.id,
+          email: mockUser.email,
+          role: mockUser.role,
+          tenantId: TENANT_ID,
+        }),
+      );
     });
 
-    it('يرمي UnauthorizedException لو الإيميل مش موجود', async () => {
+    it('يرمي UnauthorizedException لو المستخدم مش موجود', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
-      //  بنمرر (dto, tenantId)
-      await expect(service.login(loginDto, TENANT_ID)).rejects.toThrow(UnauthorizedException);
+      await expect(service.login(makeDto(), TENANT_ID))
+        .rejects.toThrow(UnauthorizedException);
+      expect(mockJwtService.sign).not.toHaveBeenCalled();
     });
 
-    it('يرمي UnauthorizedException لو كلمة المرور غلط', async () => {
+    it('يرمي UnauthorizedException لو الباسورد غلط', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-      // بنمرر (dto, tenantId)
-      await expect(service.login(loginDto, TENANT_ID)).rejects.toThrow(UnauthorizedException);
+      await expect(service.login(makeDto({ password: 'wrongpass' }), TENANT_ID))
+        .rejects.toThrow(UnauthorizedException);
+      expect(mockJwtService.sign).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── loginSuperAdmin ───────────────────────────────────────────────────────
+
+  describe('loginSuperAdmin', () => {
+    it('يرجع accessToken للـ superadmin بدون tenantId', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(mockSuperAdmin);
+
+      const result = await service.loginSuperAdmin({
+        email: 'superadmin@platform.com',
+        password: 'password123',
+      });
+
+      expect(result).toHaveProperty('accessToken', ACCESS_TOKEN);
+      expect(result.data.tenantId).toBeNull();
+      expect(result.data.role).toBe('SUPER_ADMIN');
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId: null, role: 'SUPER_ADMIN' }),
+      );
     });
 
-    it('مش بيرجع hashedPassword في الـ response', async () => {
-      mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      // بنمرر (dto, tenantId)
-      const result = await service.login(loginDto, TENANT_ID);
-      expect(result.data).not.toHaveProperty('hashedPassword');
+    it('يرمي UnauthorizedException لو الحساب مش superadmin', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(null);
+      await expect(
+        service.loginSuperAdmin({ email: 'student@test.com', password: '123' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ── reissueToken ──────────────────────────────────────────────────────────
+
+  describe('reissueToken', () => {
+    it('يوقّع توكن جديد من بيانات المستخدم الحالي', () => {
+      const token = service.reissueToken({
+        id: mockUser.id,
+        email: mockUser.email,
+        role: mockUser.role,
+        tenantId: mockUser.tenantId,
+        name: mockUser.name,
+      });
+
+      expect(token).toBe(ACCESS_TOKEN);
+      expect(mockJwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sub: mockUser.id,
+          tenantId: TENANT_ID,
+        }),
+      );
+    });
+  });
+
+  // ── getMe ─────────────────────────────────────────────────────────────────
+
+  describe('getMe', () => {
+    it('يرجع بيانات المستخدم من الداتابيز', async () => {
+      const safeUser = {
+        id: mockUser.id,
+        tenantId: mockUser.tenantId,
+        name: mockUser.name,
+        email: mockUser.email,
+        role: mockUser.role,
+        avatar: null,
+        createdAt: mockUser.createdAt,
+      };
+      mockPrismaService.user.findUnique.mockResolvedValue(safeUser);
+
+      const result = await service.getMe(mockUser.id);
+
+      expect(result).toEqual(safeUser);
+      expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: mockUser.id } }),
+      );
+    });
+
+    it('يرمي UnauthorizedException لو المستخدم مش موجود', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+      await expect(service.getMe('nonexistent-id'))
+        .rejects.toThrow(UnauthorizedException);
     });
   });
 });

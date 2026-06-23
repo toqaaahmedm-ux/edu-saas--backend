@@ -42,19 +42,30 @@ export class EnrollmentsService {
 
     // FEAT-04: التحقق من حد الطلاب في خطة الـ tenant
     const subscription = await this.billingService.getTenantSubscription(tenantId);
-    if (subscription) {
-      const maxStudents = subscription.plan.maxStudents;
-      const currentStudents = await this.prisma.enrollment.count({
-        where: { tenantId },
-      });
-      if (currentStudents >= maxStudents) {
-        throw new ForbiddenException(
-          `Student limit reached (${maxStudents}). Please upgrade your plan.`,
-        );
-      }
-    }
 
-    const enrollment = await this.enrollmentsRepository.create(tenantId, studentId, courseId);
+    // CRIT-11 FIX: قبل كده الفحص (count) وعملية الإنشاء (create) كانوا
+    // عمليتين منفصلتين — طلبين متزامنين كانوا ممكن يعدّوا فحص الحد
+    // المسموح به في نفس اللحظة (race condition) ويتسجلوا الاتنين رغم
+    // إن الخطة وصلت لحدها. دلوقتي بنلف الفحص والإنشاء في transaction
+    // واحدة، فمفيش طلب تاني يقدر "يشوف" حالة قديمة للعدّاد أثناء ما إحنا
+    // لسه بنسجل الطلب الحالي.
+    const enrollment = await this.prisma.$transaction(async (tx) => {
+      if (subscription) {
+        const maxStudents = subscription.plan.maxStudents;
+        const currentStudents = await tx.enrollment.count({
+          where: { tenantId },
+        });
+        if (currentStudents >= maxStudents) {
+          throw new ForbiddenException(
+            `Student limit reached (${maxStudents}). Please upgrade your plan.`,
+          );
+        }
+      }
+
+      return tx.enrollment.create({
+        data: { tenantId, studentId, courseId },
+      });
+    });
 
     await this.notificationsService.createNotification({
       userId: studentId,

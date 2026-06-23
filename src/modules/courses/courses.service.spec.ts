@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CoursesService } from './courses.service';
 import { CoursesRepository } from './courses.repository';
+import { PrismaService } from '../../prisma/prisma.service';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { CourseStatus } from '@prisma/client';
 
@@ -17,6 +18,20 @@ const mockCoursesRepository = {
   countAll: jest.fn(),
   countStudents: jest.fn(),
   sumRevenue: jest.fn(),
+};
+
+// ملحوظة: الكود الحقيقي بقى بياخد PrismaService في الـ constructor —
+// بيستخدمها مباشرة في getTeacherStats() (quiz.count) و
+// getTeacherAnalytics() (quizAttempt.findMany). الميثودز اللي إحنا
+// بنتستهم هنا مش بيلمسوا الجزء ده، لكن NestJS لازم يقدر يبني الكلاس
+// كامل وقت compile()، فلازم نوفر mock حتى لو مش هنستخدمه في كل تست.
+const mockPrismaService = {
+  quiz: {
+    count: jest.fn(),
+  },
+  quizAttempt: {
+    findMany: jest.fn(),
+  },
 };
 
 const mockCourse = {
@@ -39,6 +54,7 @@ describe('CoursesService', () => {
       providers: [
         CoursesService,
         { provide: CoursesRepository, useValue: mockCoursesRepository },
+        { provide: PrismaService, useValue: mockPrismaService },
       ],
     }).compile();
 

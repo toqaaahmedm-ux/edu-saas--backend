@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  NotImplementedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
@@ -18,11 +19,9 @@ export class BillingService {
     private config: ConfigService,
   ) {
     this.stripe = new Stripe(this.config.get<string>('STRIPE_SECRET_KEY')!, {
-     apiVersion: '2026-05-27.dahlia',
+      apiVersion: '2026-05-27.dahlia',
     });
   }
-
-  // ── Plans ────────────────────────────────────────────────────
 
   async getAllPlans() {
     return this.prisma.plan.findMany({
@@ -86,8 +85,6 @@ export class BillingService {
     return this.updatePlan(id, { isArchived: true });
   }
 
-  // ── Subscriptions ────────────────────────────────────────────
-
   async getTenantSubscription(tenantId: string) {
     return this.prisma.subscription.findFirst({
       where: { tenantId, status: 'ACTIVE' },
@@ -96,39 +93,33 @@ export class BillingService {
     });
   }
 
-  /** SuperAdmin: اشتراك مباشر بدون Stripe (تجريبي / يدوي) */
   async subscribeTenant(tenantId: string, planId: string) {
     await this.getPlanById(planId);
-
     await this.prisma.subscription.updateMany({
       where: { tenantId, status: 'ACTIVE' },
       data: { status: 'CANCELLED' },
     });
-
     const currentPeriodEnd = new Date();
     currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
-
     return this.prisma.subscription.create({
       data: { tenantId, planId, status: 'ACTIVE', currentPeriodEnd },
       include: { plan: { include: { features: true } } },
     });
   }
 
-  // ── BILL-02: Stripe Checkout ──────────────────────────────────
-
-  /**
-   * ينشئ Stripe Checkout Session للـ tenant عشان يدفع خطة معينة.
-   * بيرجع { url } — الفرونت يعمل redirect عليه.
-   */
   async createCheckoutSession(tenantId: string, planId: string) {
     const plan = await this.getPlanById(planId);
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    // FIX #22: QUARTERLY غير مدعوم في Stripe — ارفض الطلب بدل silent wrong billing
+    if (plan.billingCycle === BillingCycle.QUARTERLY) {
+      throw new NotImplementedException(
+        'Quarterly billing is not yet supported via Stripe. Please choose Monthly or Annual.',
+      );
+    }
 
-    // السعر بالـ piastres (Stripe بيتعامل بأصغر وحدة عملة)
-    // EGP: 1 جنيه = 100 قرش
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const unitAmount = Math.round(Number(plan.price) * 100);
 
     const session = await this.stripe.checkout.sessions.create({
@@ -144,21 +135,14 @@ export class BillingService {
             },
             unit_amount: unitAmount,
             recurring: {
-              interval:
-                plan.billingCycle === BillingCycle.ANNUAL
-                  ? 'year'
-                  : plan.billingCycle === BillingCycle.QUARTERLY
-                    ? 'month' // Stripe مش عنده quarter — هنتعامل معاه يدوي
-                    : 'month',
+              // FIX #22: ANNUAL → year, MONTHLY → month, QUARTERLY blocked above
+              interval: plan.billingCycle === BillingCycle.ANNUAL ? 'year' : 'month',
             },
           },
           quantity: 1,
         },
       ],
-      metadata: {
-        tenantId,
-        planId,
-      },
+      metadata: { tenantId, planId },
       success_url: `${frontendUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/billing/cancel`,
     });
@@ -166,12 +150,6 @@ export class BillingService {
     return { url: session.url, sessionId: session.id };
   }
 
-  // ── BILL-02: Stripe Webhook ───────────────────────────────────
-
-  /**
-   * بيستقبل webhook events من Stripe ويعالجهم.
-   * لازم الـ request يوصل كـ raw buffer — مش parsed JSON.
-   */
   async handleStripeWebhook(rawBody: Buffer, signature: string) {
     const webhookSecret = this.config.get<string>('STRIPE_WEBHOOK_SECRET');
     if (!webhookSecret) {
@@ -189,33 +167,26 @@ export class BillingService {
       case 'checkout.session.completed':
         await this.onCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
         break;
-
       case 'invoice.payment_succeeded':
         await this.onInvoicePaid(event.data.object as Stripe.Invoice);
         break;
-
       case 'invoice.payment_failed':
         await this.onInvoiceFailed(event.data.object as Stripe.Invoice);
         break;
-
       case 'customer.subscription.deleted':
         await this.onSubscriptionCancelled(event.data.object as Stripe.Subscription);
         break;
-
       default:
-        // نتجاهل الـ events التانية
         break;
     }
 
     return { received: true };
   }
 
-  /** checkout.session.completed — ننشئ subscription + invoice في DB */
   private async onCheckoutCompleted(session: Stripe.Checkout.Session) {
     const { tenantId, planId } = session.metadata ?? {};
     if (!tenantId || !planId) return;
 
-    // نلغي أي subscription قديمة
     await this.prisma.subscription.updateMany({
       where: { tenantId, status: 'ACTIVE' },
       data: { status: 'CANCELLED' },
@@ -223,7 +194,6 @@ export class BillingService {
 
     const currentPeriodEnd = new Date();
     currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
-
     const plan = await this.getPlanById(planId);
 
     const subscription = await this.prisma.subscription.create({
@@ -236,13 +206,12 @@ export class BillingService {
       },
     });
 
-    // نحدّث status الـ tenant
+    // FIX #23: تحديث status الـ tenant لـ ACTIVE تلقائياً بعد الدفع
     await this.prisma.tenant.update({
       where: { id: tenantId },
       data: { status: 'ACTIVE', planId },
     });
 
-    // ننشئ Invoice
     await this.prisma.invoice.create({
       data: {
         subscriptionId: subscription.id,
@@ -254,7 +223,6 @@ export class BillingService {
     });
   }
 
-  /** invoice.payment_succeeded — نحدّث Invoice الموجود أو ننشئ واحد جديد */
   private async onInvoicePaid(stripeInvoice: Stripe.Invoice) {
     const gatewayRef = (stripeInvoice as any).subscription as string;
     if (!gatewayRef) return;
@@ -265,13 +233,18 @@ export class BillingService {
     });
     if (!subscription) return;
 
-    // نمدد الـ period
     const newPeriodEnd = new Date();
     newPeriodEnd.setMonth(newPeriodEnd.getMonth() + 1);
 
     await this.prisma.subscription.update({
       where: { id: subscription.id },
       data: { status: 'ACTIVE', currentPeriodEnd: newPeriodEnd },
+    });
+
+    // FIX #23: تأكد إن الـ tenant ACTIVE عند كل دفعة ناجحة
+    await this.prisma.tenant.update({
+      where: { id: subscription.tenantId },
+      data: { status: 'ACTIVE' },
     });
 
     await this.prisma.invoice.create({
@@ -285,7 +258,6 @@ export class BillingService {
     });
   }
 
-  /** invoice.payment_failed — نحط الـ subscription على PAST_DUE */
   private async onInvoiceFailed(stripeInvoice: Stripe.Invoice) {
     const gatewayRef = (stripeInvoice as any).subscription as string;
     if (!gatewayRef) return;
@@ -301,7 +273,6 @@ export class BillingService {
       data: { status: 'PAST_DUE' },
     });
 
-    // نسجل فاتورة فاشلة
     await this.prisma.invoice.create({
       data: {
         subscriptionId: subscription.id,
@@ -310,19 +281,14 @@ export class BillingService {
         status: 'FAILED',
       },
     });
-
-    // BILL-03: dunning — نعلق الـ tenant لو فاشل أكتر من مرة (هيتعمل في BullMQ job)
   }
 
-  /** customer.subscription.deleted — نلغي الـ subscription */
   private async onSubscriptionCancelled(stripeSub: Stripe.Subscription) {
     await this.prisma.subscription.updateMany({
       where: { gatewayRef: stripeSub.id },
       data: { status: 'CANCELLED' },
     });
   }
-
-  // ── Feature Gating ────────────────────────────────────────────
 
   async checkFeatureAccess(tenantId: string, featureKey: string): Promise<boolean> {
     const subscription = await this.getTenantSubscription(tenantId);
@@ -339,8 +305,6 @@ export class BillingService {
       );
     }
   }
-
-  // ── Plan Info + Invoices ──────────────────────────────────────
 
   async getTenantPlanInfo(tenantId: string) {
     const subscription = await this.getTenantSubscription(tenantId);
