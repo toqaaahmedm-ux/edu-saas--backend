@@ -39,15 +39,33 @@ export class CoursesRepository {
     return { courses, total };
   }
 
-  findAllAdmin(tenantId: string) {
-    return this.prisma.course.findMany({
-      where: { tenantId },
-      include: {
-        instructor: { select: { name: true, email: true } },
-        _count: { select: { enrollments: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  // PERF-17 FIX: قبل كده findAllAdmin كانت بتجيب كل الكورسات للذاكرة
+  // (findMany بدون skip/take)، وبعدين courses.service.ts كان بيعمل
+  // .slice() في Node.js عشان يعمل pagination. مع آلاف الكورسات ده كان
+  // هيعمل memory pressure وبطء واضح. دلوقتي الـ pagination اتنقل
+  // لمستوى قاعدة البيانات مباشرة باستخدام skip/take + count في transaction.
+  async findAllAdmin(
+    tenantId: string,
+    skip: number = 0,
+    take: number = 10,
+  ) {
+    const where = { tenantId };
+
+    const [courses, total] = await this.prisma.$transaction([
+      this.prisma.course.findMany({
+        where,
+        include: {
+          instructor: { select: { name: true, email: true } },
+          _count: { select: { enrollments: true } },
+        },
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.course.count({ where }),
+    ]);
+
+    return { courses, total };
   }
 
   findById(id: string) {

@@ -8,6 +8,10 @@ import {
 import { CertificatesRepository } from './certificates.repository';
 import { PrismaService } from '../../prisma/prisma.service';
 
+// FIX #24: قاعدة واحدة مركزية للإصدار — نجاح الكويز + اكتمال الكورس
+const PASSING_SCORE = 70;
+const REQUIRED_PROGRESS = 100;
+
 @Injectable()
 export class CertificatesService {
   constructor(
@@ -25,6 +29,23 @@ export class CertificatesService {
     return cert;
   }
 
+  // FIX #24: helper مشترك للتحقق من الشروط
+  private async assertEligible(studentId: string, courseId: string) {
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in the course to get a certificate');
+    }
+    // FIX #24: نفس الـ threshold في المسارين
+    if (enrollment.progress < REQUIRED_PROGRESS) {
+      throw new BadRequestException(
+        `Course not completed — progress must reach ${REQUIRED_PROGRESS}%`,
+      );
+    }
+    return enrollment;
+  }
+
   async create(
     tenantId: string,
     studentId: string,
@@ -35,18 +56,8 @@ export class CertificatesService {
       facultyName: string;
     },
   ) {
-    // BL-03: التحقق من التسجيل في الكورس
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { studentId_courseId: { studentId, courseId } },
-    });
-    if (!enrollment) {
-      throw new ForbiddenException('You must be enrolled in the course to get a certificate');
-    }
-
-    // BL-03: التحقق من إكمال الكورس (progress = 100)
-    if (enrollment.progress < 100) {
-      throw new BadRequestException('Course not completed — progress must reach 100%');
-    }
+    // FIX #24: استخدام الـ helper المشترك
+    await this.assertEligible(studentId, courseId);
 
     const existing = await this.certificatesRepository.findByStudentAndCourse(
       studentId,
@@ -62,13 +73,12 @@ export class CertificatesService {
     });
   }
 
-  // تصدر تلقائياً بعد نجاح الكويز
   async issueIfPassed(
     tenantId: string,
     studentId: string,
     courseId: string,
     score: number,
-    passingScore: number = 70,
+    passingScore: number = PASSING_SCORE,
   ) {
     if (score < passingScore) return null;
 
@@ -76,6 +86,9 @@ export class CertificatesService {
       where: { studentId_courseId: { studentId, courseId } },
     });
     if (!enrollment) return null;
+
+    // FIX #24: الإصدار التلقائي بيتحقق من التقدم زي الإصدار اليدوي
+    if (enrollment.progress < REQUIRED_PROGRESS) return null;
 
     const existing = await this.certificatesRepository.findByStudentAndCourse(
       studentId,

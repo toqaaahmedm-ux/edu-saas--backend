@@ -13,6 +13,7 @@ const mockQuizRepository = {
   findQuestionsByQuizId: jest.fn(),
   findAttempt: jest.fn(),
   findCompletedAttempt: jest.fn(),
+  findAllCompletedAttempts: jest.fn(), // FEAT-07
   createAttempt: jest.fn(),
   updateAttemptScore: jest.fn(),
   deleteIncompleteAttempt: jest.fn(),
@@ -63,7 +64,6 @@ const mockEnrollment = {
   status: 'ACTIVE',
 };
 
-//  ثابت للـ tenantId في كل الـ tests
 const TENANT_ID = 'tenant-123';
 
 describe('QuizService', () => {
@@ -86,6 +86,8 @@ describe('QuizService', () => {
     jest.clearAllMocks();
 
     mockPrismaService.enrollment.findUnique.mockResolvedValue(mockEnrollment);
+    // FEAT-07: default — مفيش محاولات مكتملة
+    mockQuizRepository.findAllCompletedAttempts.mockResolvedValue([]);
   });
 
   it('should be defined', () => {
@@ -96,7 +98,6 @@ describe('QuizService', () => {
     it('يرجع كل الكويزات', async () => {
       const mockList = [mockQuiz];
       repository.findAllWithCourse.mockResolvedValue(mockList);
-      //  بنمرر tenantId
       const result = await service.getAllQuizzes(TENANT_ID);
       expect(result).toEqual(mockList);
       expect(repository.findAllWithCourse).toHaveBeenCalledTimes(1);
@@ -104,18 +105,20 @@ describe('QuizService', () => {
 
     it('يرجع array فاضية لو مفيش كويزات', async () => {
       repository.findAllWithCourse.mockResolvedValue([]);
-      //  بنمرر tenantId
       const result = await service.getAllQuizzes(TENANT_ID);
       expect(result).toEqual([]);
     });
   });
 
   describe('getQuizWithQuestions', () => {
-    it('يرجع الكويز مع الأسئلة', async () => {
+    it('يرجع الكويز مع الأسئلة (مع الـ randomization)', async () => {
       const quizWithQuestions = { ...mockQuiz, questions: mockQuestions };
       repository.findByIdWithQuestions.mockResolvedValue(quizWithQuestions);
       const result = await service.getQuizWithQuestions('quiz-123');
-      expect(result).toEqual(quizWithQuestions);
+
+      // FEAT-07: الأسئلة بتتخلط — نتحقق من المحتوى مش الترتيب
+      expect(result.questions).toHaveLength(mockQuestions.length);
+      expect(result.questions).toEqual(expect.arrayContaining(mockQuestions));
       expect(repository.findByIdWithQuestions).toHaveBeenCalledWith('quiz-123');
     });
 
@@ -141,21 +144,21 @@ describe('QuizService', () => {
   describe('startQuiz', () => {
     it('ينشئ محاولة جديدة ويرجع attemptId', async () => {
       repository.findById.mockResolvedValue(mockQuiz);
-      repository.findCompletedAttempt.mockResolvedValue(null);
+      repository.findAllCompletedAttempts.mockResolvedValue([]);
       repository.deleteIncompleteAttempt.mockResolvedValue(undefined);
       repository.createAttempt.mockResolvedValue(mockAttempt);
 
-      // بنمرر (tenantId, studentId, quizId)
       const result = await service.startQuiz(TENANT_ID, 'student-123', 'quiz-123');
 
       expect(result).toHaveProperty('attemptId', 'attempt-123');
       expect(result).toHaveProperty('startedAt');
+      expect(result).toHaveProperty('attemptsUsed', 0);
+      expect(result).toHaveProperty('attemptsRemaining', 3);
       expect(repository.createAttempt).toHaveBeenCalledWith('tenant-123', 'student-123', 'quiz-123');
     });
 
     it('يرمي NotFoundException لو الكويز مش موجود', async () => {
       repository.findById.mockResolvedValue(null);
-      // بنمرر (tenantId, studentId, quizId)
       await expect(service.startQuiz(TENANT_ID, 'student-123', 'wrong-id'))
         .rejects.toThrow(NotFoundException);
     });
@@ -163,15 +166,18 @@ describe('QuizService', () => {
     it('يرمي ForbiddenException لو الطالب مش مسجل في الكورس', async () => {
       repository.findById.mockResolvedValue(mockQuiz);
       mockPrismaService.enrollment.findUnique.mockResolvedValue(null);
-      // بنمرر (tenantId, studentId, quizId)
       await expect(service.startQuiz(TENANT_ID, 'student-123', 'quiz-123'))
         .rejects.toThrow(ForbiddenException);
     });
 
-    it('يرمي ForbiddenException لو الطالب خلص الكويز قبل كده', async () => {
+    it('يرمي ForbiddenException لو الطالب خلص الحد الأقصى من المحاولات', async () => {
       repository.findById.mockResolvedValue(mockQuiz);
-      repository.findCompletedAttempt.mockResolvedValue({ ...mockAttempt, submittedAt: new Date() });
-      //  بنمرر (tenantId, studentId, quizId)
+      // FEAT-07: 3 محاولات مكتملة = وصل الحد
+      repository.findAllCompletedAttempts.mockResolvedValue([
+        { ...mockAttempt, submittedAt: new Date(), score: 50 },
+        { ...mockAttempt, submittedAt: new Date(), score: 60 },
+        { ...mockAttempt, submittedAt: new Date(), score: 70 },
+      ]);
       await expect(service.startQuiz(TENANT_ID, 'student-123', 'quiz-123'))
         .rejects.toThrow(ForbiddenException);
     });
@@ -181,7 +187,7 @@ describe('QuizService', () => {
     const answers = [
       { questionId: 'q1', answer: 2 },
       { questionId: 'q2', answer: 2 },
-      { questionId: 'q3', answer: 0 }, // غلط
+      { questionId: 'q3', answer: 0 },
     ];
 
     beforeEach(() => {
@@ -189,12 +195,13 @@ describe('QuizService', () => {
       repository.findAttempt.mockResolvedValue(mockAttempt);
       repository.findQuestionsByQuizId.mockResolvedValue(mockQuestions);
       repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 67 });
+      // FEAT-07: بعد الـ submit في الـ test، نرجع محاولة واحدة
+      repository.findAllCompletedAttempts.mockResolvedValue([{ ...mockAttempt, score: 67, submittedAt: new Date() }]);
       mockCertificatesService.issueIfPassed.mockResolvedValue(null);
       mockNotificationsService.createNotification.mockResolvedValue({});
     });
 
     it('يحسب النقاط صح – 2 صح من 3', async () => {
-      //  بنمرر (tenantId, studentId, quizId, answers)
       const result = await service.submitQuiz(TENANT_ID, 'student-123', 'quiz-123', answers);
       expect(result.correct).toBe(2);
       expect(result.total).toBe(3);
@@ -204,7 +211,7 @@ describe('QuizService', () => {
     it('يرجع passed: true لو النتيجة >= 70%', async () => {
       const allCorrect = mockQuestions.map(q => ({ questionId: q.id, answer: q.correctIndex }));
       repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 100 });
-      //  بنمرر (tenantId, studentId, quizId, answers)
+      repository.findAllCompletedAttempts.mockResolvedValue([{ ...mockAttempt, score: 100, submittedAt: new Date() }]);
       const result = await service.submitQuiz(TENANT_ID, 'student-123', 'quiz-123', allCorrect);
       expect(result.passed).toBe(true);
     });
@@ -215,7 +222,7 @@ describe('QuizService', () => {
         { questionId: 'q2', answer: 0 },
         { questionId: 'q3', answer: 0 },
       ];
-      //  بنمرر (tenantId, studentId, quizId, answers)
+      repository.findAllCompletedAttempts.mockResolvedValue([{ ...mockAttempt, score: 0, submittedAt: new Date() }]);
       const result = await service.submitQuiz(TENANT_ID, 'student-123', 'quiz-123', wrongAnswers);
       expect(result.passed).toBe(false);
       expect(result.score).toBe(0);
@@ -243,12 +250,14 @@ describe('QuizService', () => {
       mockCertificatesService.issueIfPassed.mockResolvedValue(mockCert);
       const allCorrect = mockQuestions.map(q => ({ questionId: q.id, answer: q.correctIndex }));
       repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 100 });
+      repository.findAllCompletedAttempts.mockResolvedValue([{ ...mockAttempt, score: 100, submittedAt: new Date() }]);
       const result = await service.submitQuiz(TENANT_ID, 'student-123', 'quiz-123', allCorrect);
       expect(result.certificate).toEqual(mockCert);
     });
 
     it('يرجع score = 0 لو الإجابات كلها غلط', async () => {
       const allWrong = mockQuestions.map(q => ({ questionId: q.id, answer: 99 }));
+      repository.findAllCompletedAttempts.mockResolvedValue([{ ...mockAttempt, score: 0, submittedAt: new Date() }]);
       const result = await service.submitQuiz(TENANT_ID, 'student-123', 'quiz-123', allWrong);
       expect(result.score).toBe(0);
       expect(result.correct).toBe(0);
@@ -257,6 +266,7 @@ describe('QuizService', () => {
     it('يرجع score = 100 لو الإجابات كلها صح', async () => {
       const allCorrect = mockQuestions.map(q => ({ questionId: q.id, answer: q.correctIndex }));
       repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 100 });
+      repository.findAllCompletedAttempts.mockResolvedValue([{ ...mockAttempt, score: 100, submittedAt: new Date() }]);
       const result = await service.submitQuiz(TENANT_ID, 'student-123', 'quiz-123', allCorrect);
       expect(result.score).toBe(100);
       expect(result.correct).toBe(3);

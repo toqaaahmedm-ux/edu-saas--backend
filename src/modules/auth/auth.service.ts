@@ -106,6 +106,25 @@ export class AuthService {
     };
   }
 
+  // SEC-01 FIX: دالة جديدة لإعادة توقيع توكن من مستخدم تم التحقق منه بالفعل
+  // بتُستخدم فقط من الـ refresh endpoint، بعد ما الـ JWT guard يتحقق من صحة التوكن القديم
+  reissueToken(user: {
+    id: string;
+    email: string;
+    role: string;
+    tenantId: string | null;
+    name: string;
+  }): string {
+    const payload = this.buildPayload({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      name: user.name,
+    });
+    return this.signToken(payload);
+  }
+
   async getMe(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

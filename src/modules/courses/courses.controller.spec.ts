@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CoursesController } from './courses.controller';
 import { CoursesService } from './courses.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { FeatureGuard } from '../../common/guards/feature.guard';
 import { CourseStatus } from '@prisma/client';
 
 const mockCoursesService = {
@@ -42,6 +43,11 @@ describe('CoursesController', () => {
       providers: [{ provide: CoursesService, useValue: mockCoursesService }],
     })
       .overrideGuard(RolesGuard).useValue({ canActivate: () => true })
+      // ملحوظة: getTeacherAnalytics محمية بـ @RequireFeature('ANALYTICS')،
+      // ودا بيفعّل FeatureGuard اللي محتاج BillingService في constructor-ها.
+      // NestJS بيجهز guards كل الـ methods وقت compile()، فلازم نوفر
+      // mock حتى لو التست مش بيستهدف endpoint الـ analytics مباشرة.
+      .overrideGuard(FeatureGuard).useValue({ canActivate: () => true })
       .compile();
 
     controller = module.get<CoursesController>(CoursesController);

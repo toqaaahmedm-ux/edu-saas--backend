@@ -13,9 +13,11 @@ const mockEnrollmentsService = {
 
 const mockSessionAuthGuard = { canActivate: jest.fn(() => true) };
 
-const mockReq = {
-  user: { id: 'student-123', tenantId: 'tenant-123', role: 'STUDENT' },
-};
+// ملحوظة: ده الـ object اللي الـ @GetUser() decorator هيرجعه فعلياً
+// في الـ production. في الـ unit test مفيش NestJS pipeline بيشغل
+// الديكوريتور، فبنحط القيمة دي يدوياً بدل mockReq.user وقت ما ننده
+// على الـ controller method مباشرة.
+const mockUser = { id: 'student-123', tenantId: 'tenant-123', role: 'STUDENT' };
 
 const mockEnrollment = {
   id: 'enrollment-123',
@@ -55,26 +57,26 @@ describe('EnrollmentsController', () => {
   describe('enroll', () => {
     it('يسجل الطالب في الكورس بنجاح', async () => {
       service.enroll.mockResolvedValue(mockEnrollment);
-      const result = await controller.enroll(mockReq, { courseId: 'course-123' });
+      const result = await controller.enroll(mockUser, { courseId: 'course-123' });
       expect(result).toEqual(mockEnrollment);
       expect(service.enroll).toHaveBeenCalledWith('tenant-123', 'student-123', 'course-123');
     });
 
     it('يبعت tenantId و studentId صح للـ service', async () => {
       service.enroll.mockResolvedValue(mockEnrollment);
-      await controller.enroll(mockReq, { courseId: 'course-123' });
-      expect(service.enroll).toHaveBeenCalledWith(mockReq.user.tenantId, mockReq.user.id, 'course-123');
+      await controller.enroll(mockUser, { courseId: 'course-123' });
+      expect(service.enroll).toHaveBeenCalledWith(mockUser.tenantId, mockUser.id, 'course-123');
     });
 
     it('يرمي ConflictException لو الطالب مسجل قبل كده', async () => {
       service.enroll.mockRejectedValue(new ConflictException('Already enrolled'));
-      await expect(controller.enroll(mockReq, { courseId: 'course-123' }))
+      await expect(controller.enroll(mockUser, { courseId: 'course-123' }))
         .rejects.toThrow(ConflictException);
     });
 
     it('يرمي BadRequestException لو الكورس مش PUBLISHED', async () => {
       service.enroll.mockRejectedValue(new BadRequestException('Course is not available'));
-      await expect(controller.enroll(mockReq, { courseId: 'course-123' }))
+      await expect(controller.enroll(mockUser, { courseId: 'course-123' }))
         .rejects.toThrow(BadRequestException);
     });
   });
@@ -82,42 +84,42 @@ describe('EnrollmentsController', () => {
   describe('getMyEnrollments', () => {
     it('يرجع enrollments الطالب', async () => {
       service.getMyEnrollments.mockResolvedValue([mockEnrollment]);
-      const result = await controller.getMyEnrollments(mockReq);
+      const result = await controller.getMyEnrollments(mockUser);
       expect(result).toEqual([mockEnrollment]);
       expect(service.getMyEnrollments).toHaveBeenCalledWith('tenant-123', 'student-123');
     });
 
     it('يرجع array فاضية لو مفيش enrollments', async () => {
       service.getMyEnrollments.mockResolvedValue([]);
-      const result = await controller.getMyEnrollments(mockReq);
+      const result = await controller.getMyEnrollments(mockUser);
       expect(result).toEqual([]);
     });
 
     it('يبعت tenantId و studentId صح للـ service', async () => {
       service.getMyEnrollments.mockResolvedValue([]);
-      await controller.getMyEnrollments(mockReq);
-      expect(service.getMyEnrollments).toHaveBeenCalledWith(mockReq.user.tenantId, mockReq.user.id);
+      await controller.getMyEnrollments(mockUser);
+      expect(service.getMyEnrollments).toHaveBeenCalledWith(mockUser.tenantId, mockUser.id);
     });
   });
 
   describe('getEnrollmentsByCourse', () => {
     it('يرجع enrollments الكورس', async () => {
       service.getEnrollmentsByCourse.mockResolvedValue([mockEnrollment]);
-      const result = await controller.getEnrollmentsByCourse('course-123', mockReq);
+      const result = await controller.getEnrollmentsByCourse('course-123', mockUser);
       expect(result).toEqual([mockEnrollment]);
       expect(service.getEnrollmentsByCourse).toHaveBeenCalledWith('tenant-123', 'course-123');
     });
 
     it('يرمي NotFoundException لو الكورس مش موجود', async () => {
       service.getEnrollmentsByCourse.mockRejectedValue(new NotFoundException('Course not found'));
-      await expect(controller.getEnrollmentsByCourse('wrong-id', mockReq))
+      await expect(controller.getEnrollmentsByCourse('wrong-id', mockUser))
         .rejects.toThrow(NotFoundException);
     });
 
     it('يبعت tenantId و courseId صح للـ service', async () => {
       service.getEnrollmentsByCourse.mockResolvedValue([]);
-      await controller.getEnrollmentsByCourse('course-123', mockReq);
-      expect(service.getEnrollmentsByCourse).toHaveBeenCalledWith(mockReq.user.tenantId, 'course-123');
+      await controller.getEnrollmentsByCourse('course-123', mockUser);
+      expect(service.getEnrollmentsByCourse).toHaveBeenCalledWith(mockUser.tenantId, 'course-123');
     });
   });
 });

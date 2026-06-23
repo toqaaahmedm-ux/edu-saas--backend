@@ -32,11 +32,14 @@ export class CoursesService {
     };
   }
 
+  // PERF-17 FIX: قبل كده كنا بنجيب كل الكورسات للذاكرة بـ findAllAdmin()
+  // من غير skip/take، وبعدين نعمل .slice() في Node.js. دلوقتي بنمرر
+  // skip/take للـ repository مباشرة عشان الـ DB هي اللي تعمل الـ pagination.
   async findAllAdmin(tenantId: string, page: number = 1, limit: number = 10) {
-    const allCourses = await this.coursesRepository.findAllAdmin(tenantId);
-    const total = allCourses.length;
-    const start = (page - 1) * limit;
-    const courses = allCourses.slice(start, start + limit);
+    const skip = (page - 1) * limit;
+    const { courses, total } = await this.coursesRepository.findAllAdmin(
+      tenantId, skip, limit,
+    );
     return {
       courses,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
@@ -138,7 +141,6 @@ export class CoursesService {
     };
   }
 
-  // ✅ NEW: بيانات الـ analytics الحقيقية بدل /api/analytics في Next.js
   async getTeacherAnalytics(tenantId: string, instructorId: string) {
     const courses = await this.coursesRepository.findByInstructor(tenantId, instructorId);
     const courseIds = courses.map((c) => c.id);
