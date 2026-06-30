@@ -17,9 +17,12 @@ export class LoggingInterceptor implements NestInterceptor {
     const { method, url } = request;
     const now = Date.now();
 
+    // ✅ BE-L02: شيل الـ query params من الـ log عشان متتسجلش PII
+    const cleanUrl = url.split('?')[0];
+
     return next.handle().pipe(
       tap(() => {
-        this.logger.log(`${method} ${url} — ${Date.now() - now}ms`);
+        this.logger.log(`${method} ${cleanUrl} — ${Date.now() - now}ms`);
       }),
     );
   }

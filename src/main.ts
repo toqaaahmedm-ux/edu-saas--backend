@@ -10,7 +10,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptors';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.use(helmet());
 
@@ -35,7 +35,11 @@ const app = await NestFactory.create(AppModule, { rawBody: true });
     ].filter(Boolean),
     credentials: true,
   });
-
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true, // ✅ BE-H03
+  }));
   app.setGlobalPrefix('api');
 
   const config = new DocumentBuilder()

@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
+import { tenantContext } from '../tenant-context'; 
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -24,14 +25,14 @@ export class TenantMiddleware implements NestMiddleware {
       }
 
       (req as any).tenantId = tenant.id;
-      return next();
+      // ✅ حط الـ tenantId في AsyncLocalStorage عشان prisma.service يشوفه
+      return tenantContext.run({ tenantId: tenant.id }, () => next());
     }
 
     // Priority 2: explicit header — DEVELOPMENT ONLY
     if (!isProduction) {
       const headerTenantId = req.headers['x-tenant-id'] as string;
       if (headerTenantId) {
-        // ── تحقق إن الـ tenant موجود فعلاً في الـ DB ──
         const tenant = await this.prisma.tenant.findUnique({
           where: { id: headerTenantId },
         });
@@ -39,12 +40,14 @@ export class TenantMiddleware implements NestMiddleware {
           throw new NotFoundException(`Tenant '${headerTenantId}' not found`);
         }
         (req as any).tenantId = tenant.id;
-        return next();
+       
+        return tenantContext.run({ tenantId: tenant.id }, () => next());
       }
     }
 
     // Priority 3: SuperAdmin requests
     (req as any).tenantId = null;
-    next();
+    // ✅ SuperAdmin — tenantId = null عشان يعدي الـ RLS
+    tenantContext.run({ tenantId: null }, () => next());
   }
 }

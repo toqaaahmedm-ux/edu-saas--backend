@@ -1,6 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import * as Joi from 'joi';
 import { PrismaModule } from './prisma/prisma.module';
@@ -16,6 +16,7 @@ import { UploadModule } from './modules/upload/upload.module';
 import { SessionAuthGuard } from './common/guards/session-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
   imports: [
@@ -23,8 +24,7 @@ import { TenantMiddleware } from './common/middleware/tenant.middleware';
       isGlobal: true,
       // SEC-05 FIX: لو أي متغير حرج فاضي أو ناقص، التطبيق يوقف عن الإقلاع
       // فوراً بدل ما يشتغل بقيمة "undefined" كـ string — السيناريو ده كان
-      // بيخلي JWT_SECRET يبقى string ثابت ومعروف (=== process.env.JWT_SECRET
-      // اللي مش موجود) وأي حد عارف ده يقدر يوقّع JWT صالح بنفسه.
+      // بيخلي JWT_SECRET يبقى string ثابت ومعروف وأي حد عارف ده يقدر يوقّع JWT صالح بنفسه.
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
           .valid('development', 'production', 'test')
@@ -75,6 +75,17 @@ import { TenantMiddleware } from './common/middleware/tenant.middleware';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // BE-C06 FIX: AuditInterceptor كانت معرَّفة كاملة ومعاها decorator
+    // @AuditAction مستخدم فعلاً في admin.controller.ts (TENANT_SUSPENDED,
+    // PLAN_ASSIGNED) — لكن مفيش تسجيل خالص في الـ pipeline، فمفيش audit
+    // log واحد بيتكتب فعلياً. الـ interceptor عنده dependencies
+    // (PrismaService, Reflector)، فلازم يتسجل كـ APP_INTERCEPTOR provider
+    // هنا (مش new AuditInterceptor() في main.ts) عشان NestJS يحقن
+    // الـ dependencies بتاعته صح.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
   ],
 })

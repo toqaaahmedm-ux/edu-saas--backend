@@ -46,8 +46,13 @@ export class CoursesService {
     };
   }
 
-  async findById(id: string) {
-    const course = await this.coursesRepository.findById(id);
+  // BE-C03 FIX: tenantId بقى اختياري لكن لازم يتمرر من كل الـ callers
+  // اللي عندهم سياق tenant فعلي (الكونترولر بقى بيقرأه من TenantMiddleware
+  // ويبعته هنا). لو الكورس موجود لكن تبع مستأجر تاني، الـ repository
+  // هيرجع null والـ service هيرمي NotFoundException بالظبط زي حالة
+  // "الكورس مش موجود خالص" — ده يمنع تسريب معلومة وجود الكورس لمستأجرين تانيين.
+  async findById(id: string, tenantId?: string) {
+    const course = await this.coursesRepository.findById(id, tenantId);
     if (!course) throw new NotFoundException('Course not found');
     return course;
   }
@@ -67,10 +72,16 @@ export class CoursesService {
     return this.coursesRepository.create(data);
   }
 
+  // BE-C04 FIX: tenantId بقى بارامتر خامس — بيتحقق إن الكورس تبع نفس
+  // مستأجر الـ admin/teacher الطالب التعديل قبل ما يوصل لفحص الملكية
+  // (owner check). كمان بيتمرر للـ repository نفسها كطبقة حماية ثانية
+  // على مستوى الاستعلام (defense in depth) — حتى لو فات الفحص هنا بطريقة
+  // ما، الـ DB query نفسه مش هيلاقي صف يطابق tenantId مختلف.
   async update(
     id: string,
     requestUserId: string,
     requestUserRole: string,
+    tenantId: string,
     data: {
       title?: string;
       description?: string;
@@ -80,21 +91,21 @@ export class CoursesService {
       status?: CourseStatus;
     },
   ) {
-    const course = await this.findById(id);
+    const course = await this.findById(id, tenantId);
     if (requestUserRole !== 'ADMIN' && course.instructorId !== requestUserId) {
       throw new ForbiddenException('You do not own this course');
     }
     if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
-    return this.coursesRepository.update(id, data);
+    return this.coursesRepository.update(id, data, tenantId);
   }
 
-  async updateStatus(id: string, status: CourseStatus) {
-    await this.findById(id);
-    return this.coursesRepository.updateStatus(id, status);
+  async updateStatus(id: string, status: CourseStatus, tenantId: string) {
+    await this.findById(id, tenantId);
+    return this.coursesRepository.updateStatus(id, status, tenantId);
   }
 
-  async delete(id: string) {
-    const course = await this.findById(id);
+  async delete(id: string, tenantId: string) {
+    const course = await this.findById(id, tenantId);
     if (course.status === CourseStatus.PUBLISHED) {
       throw new BadRequestException(
         'Cannot delete a published course. Archive it instead to protect student data.',
@@ -106,13 +117,13 @@ export class CoursesService {
         'Cannot delete a course with enrolled students. Archive it instead.',
       );
     }
-    await this.coursesRepository.delete(id);
+    await this.coursesRepository.delete(id, tenantId);
     return { message: 'Course deleted successfully' };
   }
 
-  async archive(id: string) {
-    await this.findById(id);
-    return this.coursesRepository.updateStatus(id, CourseStatus.ARCHIVED);
+  async archive(id: string, tenantId: string) {
+    await this.findById(id, tenantId);
+    return this.coursesRepository.updateStatus(id, CourseStatus.ARCHIVED, tenantId);
   }
 
   async findByInstructor(tenantId: string, instructorId: string) {

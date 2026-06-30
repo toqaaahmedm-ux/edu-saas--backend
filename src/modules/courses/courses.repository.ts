@@ -68,9 +68,18 @@ export class CoursesRepository {
     return { courses, total };
   }
 
-  findById(id: string) {
-    return this.prisma.course.findUnique({
-      where: { id },
+  // BE-C03 FIX: قبل كده findById كانت بتجيب الكورس بالـ id بس من غير
+  // أي فلتر على tenantId — يعني GET /courses/:id كان يقدر يرجع كورس
+  // تبع مستأجر تاني تماماً لو الشخص عارف الـ UUID بتاعه. دلوقتي tenantId
+  // بقى جزء من شرط WHERE نفسه (مش فحص لاحق في الكود)، فالاستعلام يرجع
+  // null لو الكورس مش تبع نفس المستأجر، بالظبط زي لو مش موجود خالص —
+  // ده يمنع حتى تسريب معلومة "الكورس ده موجود بس مش بتاعك".
+  findById(id: string, tenantId?: string) {
+    return this.prisma.course.findFirst({
+      where: {
+        id,
+        ...(tenantId && { tenantId }),
+      },
       include: {
         instructor: { select: { name: true, email: true } },
         _count: { select: { enrollments: true } },
@@ -100,6 +109,10 @@ export class CoursesRepository {
     });
   }
 
+  // BE-C04 FIX: update/delete/updateStatus بقوا بياخدوا tenantId
+  // اختياري ويحطوه في شرط WHERE نفسه. لو الـ admin بعت id كورس تبع
+  // مستأجر تاني، Prisma هيرمي P2025 (record not found) بدل ما ينفّذ
+  // التعديل أو الحذف — مش محتاجين نعتمد بس على فحص منطقي بعد الجلب.
   update(
     id: string,
     data: {
@@ -110,10 +123,14 @@ export class CoursesRepository {
       price?: number;
       status?: CourseStatus;
     },
+    tenantId?: string,
   ) {
     const { title, description, thumbnail, category, price, status } = data;
     return this.prisma.course.update({
-      where: { id },
+      where: {
+        id,
+        ...(tenantId && { tenantId }),
+      },
       data: {
         ...(title && { title }),
         ...(description && { description }),
@@ -125,12 +142,23 @@ export class CoursesRepository {
     });
   }
 
-  delete(id: string) {
-    return this.prisma.course.delete({ where: { id } });
+  delete(id: string, tenantId?: string) {
+    return this.prisma.course.delete({
+      where: {
+        id,
+        ...(tenantId && { tenantId }),
+      },
+    });
   }
 
-  updateStatus(id: string, status: CourseStatus) {
-    return this.prisma.course.update({ where: { id }, data: { status } });
+  updateStatus(id: string, status: CourseStatus, tenantId?: string) {
+    return this.prisma.course.update({
+      where: {
+        id,
+        ...(tenantId && { tenantId }),
+      },
+      data: { status },
+    });
   }
 
   findByInstructor(tenantId: string, instructorId: string) {

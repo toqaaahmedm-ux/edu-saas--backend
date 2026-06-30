@@ -4,6 +4,7 @@
   ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -22,10 +23,22 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   private signToken(payload: JwtPayload): string {
     return this.jwtService.sign(payload);
+  }
+
+  // ✅ جديد — بيعمل refresh token بـ secret مختلف وعمر 7 أيام
+  private signRefreshToken(userId: string): string {
+    return this.jwtService.sign(
+      { sub: userId },
+      {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d') as any,
+      },
+    );
   }
 
   private buildPayload(user: {
@@ -69,9 +82,11 @@ export class AuthService {
 
     const payload = this.buildPayload(user);
     const accessToken = this.signToken(payload);
+    const refreshToken = this.signRefreshToken(user.id); // ✅ جديد
 
     return {
       accessToken,
+      refreshToken, // ✅ جديد
       data: {
         id: user.id,
         tenantId: user.tenantId,
@@ -93,9 +108,11 @@ export class AuthService {
 
     const payload = this.buildPayload(user);
     const accessToken = this.signToken(payload);
+    const refreshToken = this.signRefreshToken(user.id); // ✅ جديد
 
     return {
       accessToken,
+      refreshToken, // ✅ جديد
       data: {
         id: user.id,
         tenantId: null,
@@ -106,8 +123,25 @@ export class AuthService {
     };
   }
 
-  // SEC-01 FIX: دالة جديدة لإعادة توقيع توكن من مستخدم تم التحقق منه بالفعل
-  // بتُستخدم فقط من الـ refresh endpoint، بعد ما الـ JWT guard يتحقق من صحة التوكن القديم
+  // ✅ جديد — بيتحقق من الـ refresh token ويرجع access token جديد
+  async refreshAccessToken(refreshToken: string): Promise<string> {
+    try {
+      const payload = this.jwtService.verify<{ sub: string }>(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, email: true, role: true, tenantId: true, name: true },
+      });
+      if (!user) throw new UnauthorizedException();
+
+      return this.signToken(this.buildPayload(user));
+    } catch {
+      throw new UnauthorizedException('Refresh token invalid or expired');
+    }
+  }
+
   reissueToken(user: {
     id: string;
     email: string;
@@ -115,14 +149,7 @@ export class AuthService {
     tenantId: string | null;
     name: string;
   }): string {
-    const payload = this.buildPayload({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      tenantId: user.tenantId,
-      name: user.name,
-    });
-    return this.signToken(payload);
+    return this.signToken(this.buildPayload(user));
   }
 
   async getMe(userId: string) {

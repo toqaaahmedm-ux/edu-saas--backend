@@ -23,9 +23,31 @@ export class CertificatesService {
     return this.certificatesRepository.findByStudentId(tenantId, studentId);
   }
 
-  async findById(id: string) {
+  // BE-C05 FIX: قبل كده findById كانت بترجع أي شهادة بالـ id من غير أي
+  // تحقق — أي مستخدم مصادق (وحتى endpoint مكشوف بدون auth خالص) كان
+  // يقدر يشوف بيانات شخصية لطالب تاني (اسم، إيميل، اسم الكورس...).
+  // دلوقتي بنتحقق من حاجتين بالترتيب:
+  //  1. الشهادة تبع نفس المستأجر (tenantId) — لو لأ نرمي NotFoundException
+  //     بدل ForbiddenException عشان منكشفش إن الشهادة موجودة عند مستأجر تاني.
+  //  2. صاحب الطلب هو الطالب نفسه، أو ADMIN/TEACHER في نفس المستأجر —
+  //     غير ذلك نرمي ForbiddenException.
+  async findById(
+    id: string,
+    tenantId: string,
+    requestUserId: string,
+    requestUserRole: string,
+  ) {
     const cert = await this.certificatesRepository.findById(id);
-    if (!cert) throw new NotFoundException('Certificate not found');
+    if (!cert || cert.tenantId !== tenantId) {
+      throw new NotFoundException('Certificate not found');
+    }
+
+    const isOwner = cert.studentId === requestUserId;
+    const isStaff = requestUserRole === 'ADMIN' || requestUserRole === 'TEACHER';
+    if (!isOwner && !isStaff) {
+      throw new ForbiddenException('You do not have access to this certificate');
+    }
+
     return cert;
   }
 

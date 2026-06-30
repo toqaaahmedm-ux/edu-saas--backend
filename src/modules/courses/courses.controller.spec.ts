@@ -4,6 +4,7 @@ import { CoursesService } from './courses.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { FeatureGuard } from '../../common/guards/feature.guard';
 import { CourseStatus } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
 
 const mockCoursesService = {
   findAll: jest.fn(),
@@ -20,8 +21,11 @@ const mockCoursesService = {
   getAdminStats: jest.fn(),
 };
 
+const TENANT_ID = 'tenant-123';
+
 const mockCourse = {
   id: 'course-123',
+  tenantId: TENANT_ID,
   title: 'NestJS Course',
   description: 'Learn NestJS',
   instructorId: 'teacher-123',
@@ -30,9 +34,16 @@ const mockCourse = {
 
 const mockUser = {
   id: 'teacher-123',
-  tenantId: 'tenant-123',
+  tenantId: TENANT_ID,
   role: 'TEACHER',
 };
+
+// BE-C03: findAll و findOne بقوا بياخدوا tenantId من req.tenantId
+// (المتحط بواسطة TenantMiddleware) مش من query أو من المستخدم مباشرة.
+// في الـ unit test، بنحط mock request فيه tenantId يدوياً لأن
+// الـ middleware نفسه مش بيشتغل هنا.
+const mockReqWithTenant = { tenantId: TENANT_ID } as any;
+const mockReqNoTenant = { tenantId: null } as any;
 
 describe('CoursesController', () => {
   let controller: CoursesController;
@@ -43,10 +54,6 @@ describe('CoursesController', () => {
       providers: [{ provide: CoursesService, useValue: mockCoursesService }],
     })
       .overrideGuard(RolesGuard).useValue({ canActivate: () => true })
-      // ملحوظة: getTeacherAnalytics محمية بـ @RequireFeature('ANALYTICS')،
-      // ودا بيفعّل FeatureGuard اللي محتاج BillingService في constructor-ها.
-      // NestJS بيجهز guards كل الـ methods وقت compile()، فلازم نوفر
-      // mock حتى لو التست مش بيستهدف endpoint الـ analytics مباشرة.
       .overrideGuard(FeatureGuard).useValue({ canActivate: () => true })
       .compile();
 
@@ -61,16 +68,34 @@ describe('CoursesController', () => {
   describe('findAll', () => {
     it('يرجع كورسات مع pagination', async () => {
       mockCoursesService.findAll.mockResolvedValue({ courses: [mockCourse], meta: { total: 1 } });
-      const result = await controller.findAll('1', '10', undefined, undefined, mockUser);
+      const result = await controller.findAll(mockReqWithTenant, '1', '10', undefined, undefined);
       expect(result.courses).toHaveLength(1);
+      expect(mockCoursesService.findAll).toHaveBeenCalledWith(TENANT_ID, 1, 10, undefined, undefined);
+    });
+
+    // findAll مش async — لما الـ tenant context مفقود بترمي الخطأ مباشرة
+    // (synchronously) قبل ما توصل لأي return Promise، فبنستخدم
+    // expect(() => ...).toThrow بدل rejects.toThrow.
+    it('يرمي BadRequestException لو مفيش tenant context', () => {
+      expect(() => controller.findAll(mockReqNoTenant, '1', '10', undefined, undefined))
+        .toThrow(BadRequestException);
+      expect(mockCoursesService.findAll).not.toHaveBeenCalled();
     });
   });
 
   describe('findOne', () => {
-    it('يرجع كورس بالـ id', async () => {
+    it('يرجع كورس بالـ id لما يكون فيه tenant context', async () => {
       mockCoursesService.findById.mockResolvedValue(mockCourse);
-      const result = await controller.findOne('course-123');
+      const result = await controller.findOne('course-123', mockReqWithTenant);
       expect(result).toEqual(mockCourse);
+      expect(mockCoursesService.findById).toHaveBeenCalledWith('course-123', TENANT_ID);
+    });
+
+    // findOne برضو مش async — نفس السبب أعلاه
+    it('يرمي BadRequestException لو مفيش tenant context', () => {
+      expect(() => controller.findOne('course-123', mockReqNoTenant))
+        .toThrow(BadRequestException);
+      expect(mockCoursesService.findById).not.toHaveBeenCalled();
     });
   });
 
@@ -86,34 +111,40 @@ describe('CoursesController', () => {
   });
 
   describe('update', () => {
-    it('يعدل الكورس', async () => {
+    it('يعدل الكورس ويبعت tenantId للـ service', async () => {
       mockCoursesService.update.mockResolvedValue({ ...mockCourse, title: 'Updated' });
       const result = await controller.update('course-123', mockUser, { title: 'Updated' });
       expect(result.title).toBe('Updated');
+      expect(mockCoursesService.update).toHaveBeenCalledWith(
+        'course-123', mockUser.id, mockUser.role, mockUser.tenantId, { title: 'Updated' },
+      );
     });
   });
 
   describe('updateStatus', () => {
-    it('يغير status الكورس', async () => {
+    it('يغير status الكورس ويبعت tenantId', async () => {
       mockCoursesService.updateStatus.mockResolvedValue({ ...mockCourse, status: CourseStatus.PUBLISHED });
-      const result = await controller.updateStatus('course-123', { status: 'PUBLISHED' });
+      const result = await controller.updateStatus('course-123', mockUser, { status: 'PUBLISHED' });
       expect(result.status).toBe(CourseStatus.PUBLISHED);
+      expect(mockCoursesService.updateStatus).toHaveBeenCalledWith('course-123', 'PUBLISHED', TENANT_ID);
     });
   });
 
   describe('archive', () => {
-    it('يحول الكورس لـ ARCHIVED', async () => {
+    it('يحول الكورس لـ ARCHIVED ويبعت tenantId', async () => {
       mockCoursesService.archive.mockResolvedValue({ ...mockCourse, status: CourseStatus.ARCHIVED });
-      const result = await controller.archive('course-123');
+      const result = await controller.archive('course-123', mockUser);
       expect(result.status).toBe(CourseStatus.ARCHIVED);
+      expect(mockCoursesService.archive).toHaveBeenCalledWith('course-123', TENANT_ID);
     });
   });
 
   describe('delete', () => {
-    it('يحذف الكورس', async () => {
+    it('يحذف الكورس ويبعت tenantId', async () => {
       mockCoursesService.delete.mockResolvedValue({ message: 'Course deleted successfully' });
-      const result = await controller.delete('course-123');
+      const result = await controller.delete('course-123', mockUser);
       expect(result.message).toBe('Course deleted successfully');
+      expect(mockCoursesService.delete).toHaveBeenCalledWith('course-123', TENANT_ID);
     });
   });
 

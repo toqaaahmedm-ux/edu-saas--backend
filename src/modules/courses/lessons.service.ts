@@ -11,19 +11,17 @@ export class LessonsService {
     private prisma: PrismaService,
   ) {}
 
-  async getLessons(courseId: string, userId: string, userRole: string) {
-    const course = await this.coursesRepository.findById(courseId);
+  async getLessons(courseId: string, userId: string, userRole: string, tenantId: string) { // ✅ BE-M02
+    const course = await this.coursesRepository.findById(courseId, tenantId);
     if (!course) throw new NotFoundException('Course not found');
 
     const isAdmin = userRole === 'ADMIN';
     const isInstructor = course.instructorId === userId;
 
     if (isAdmin || isInstructor) {
-      // المدرس والأدمن يشوفوا كل الدروس بما فيها المجدولة مستقبلاً
-      return this.lessonsRepository.findByCourseId(courseId);
+      return this.lessonsRepository.findByCourseId(courseId, tenantId); // ✅
     }
 
-    // الطالب — لازم يكون enrolled
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId: userId, courseId } },
     });
@@ -31,18 +29,17 @@ export class LessonsService {
       throw new ForbiddenException('You must be enrolled in this course to view lessons');
     }
 
-    // FEAT-03: الطالب يشوف الدروس المتاحة بس (availableAt <= now أو null)
-    return this.lessonsRepository.findAvailableByCourseId(courseId);
+    return this.lessonsRepository.findAvailableByCourseId(courseId, tenantId); // ✅
   }
 
-  async create(courseId: string, userId: string, userRole: string, data: {
+  async create(courseId: string, userId: string, userRole: string, tenantId: string, data: { // ✅ BE-M02
     title: string;
     videoUrl?: string;
     duration?: number;
     order: number;
-    availableAt?: string | null; // FEAT-03: ISO string من الفرونت
+    availableAt?: string | null;
   }) {
-    const course = await this.coursesRepository.findById(courseId);
+    const course = await this.coursesRepository.findById(courseId, tenantId);
     if (!course) throw new NotFoundException('Course not found');
 
     if (userRole !== 'ADMIN' && course.instructorId !== userId) {
@@ -51,28 +48,29 @@ export class LessonsService {
 
     return this.lessonsRepository.create({
       ...data,
+      tenantId,   // ✅
       courseId,
       availableAt: data.availableAt ? new Date(data.availableAt) : null,
     });
   }
 
-  async update(id: string, userId: string, userRole: string, data: {
+  async update(id: string, userId: string, userRole: string, tenantId: string, data: { // ✅ BE-M02
     title?: string;
     videoUrl?: string;
     duration?: number;
     order?: number;
-    availableAt?: string | null; // FEAT-03
+    availableAt?: string | null;
   }) {
-    const lesson = await this.lessonsRepository.findById(id);
+    const lesson = await this.lessonsRepository.findById(id, tenantId); // ✅
     if (!lesson) throw new NotFoundException('Lesson not found');
 
-    const course = await this.coursesRepository.findById(lesson.courseId);
+    const course = await this.coursesRepository.findById(lesson.courseId, tenantId);
     if (userRole !== 'ADMIN' && course!.instructorId !== userId) {
       throw new ForbiddenException('You do not own this course');
     }
 
     const { availableAt, ...rest } = data;
-    return this.lessonsRepository.update(id, {
+    return this.lessonsRepository.update(id, tenantId, { // ✅
       ...rest,
       ...(availableAt !== undefined && {
         availableAt: availableAt ? new Date(availableAt) : null,
@@ -80,15 +78,15 @@ export class LessonsService {
     });
   }
 
-  async delete(id: string, userId: string, userRole: string) {
-    const lesson = await this.lessonsRepository.findById(id);
+  async delete(id: string, userId: string, userRole: string, tenantId: string) { // ✅ BE-M02
+    const lesson = await this.lessonsRepository.findById(id, tenantId); // ✅
     if (!lesson) throw new NotFoundException('Lesson not found');
 
-    const course = await this.coursesRepository.findById(lesson.courseId);
+    const course = await this.coursesRepository.findById(lesson.courseId, tenantId);
     if (userRole !== 'ADMIN' && course!.instructorId !== userId) {
       throw new ForbiddenException('You do not own this course');
     }
 
-    return this.lessonsRepository.delete(id);
+    return this.lessonsRepository.delete(id, tenantId); // ✅
   }
 }

@@ -8,7 +8,6 @@ generator client {
   engineType = "library"
 }
 
-// ─── Enums ───────────────────────────────────────────
 enum Role {
   SUPER_ADMIN
   ADMIN
@@ -41,8 +40,6 @@ enum BillingCycle {
   ANNUAL
 }
 
-// ─── Platform Plane ───────────────────────────────────
-
 model Tenant {
   id            String       @id @default(uuid())
   name          String
@@ -58,6 +55,7 @@ model Tenant {
   owner         User?          @relation("TenantOwner", fields: [ownerUserId], references: [id])
   users         User[]         @relation("TenantUsers")
   courses       Course[]
+  lessons       Lesson[]       // ✅ BE-M02: إضافة relation
   enrollments   Enrollment[]
   quizAttempts  QuizAttempt[]
   certificates  Certificate[]
@@ -149,8 +147,6 @@ model AuditLog {
   @@index([actorId])
 }
 
-// ─── Core Models ─────────────────────────────────────
-
 model User {
   id             String   @id @default(uuid())
   tenantId       String?
@@ -205,6 +201,7 @@ model Course {
 
 model Lesson {
   id          String    @id @default(uuid())
+  tenantId    String                          // ✅ BE-M02
   title       String
   videoUrl    String?
   duration    Int       @default(0)
@@ -214,9 +211,12 @@ model Lesson {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([courseId, order])
+  @@index([tenantId])
+  @@index([courseId])
 }
 
 model Quiz {
@@ -280,7 +280,6 @@ model QuizAttempt {
   student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   quiz    Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
-  // FEAT-07: شيلنا @@unique عشان نسمح بمحاولات متعددة (max 3)
   @@index([tenantId])
   @@index([studentId, quizId])
 }
