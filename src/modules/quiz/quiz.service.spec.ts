@@ -27,9 +27,15 @@ const mockNotificationsService = {
   createNotification: jest.fn().mockResolvedValue({}),
 };
 
+// ✅ BE-M03: ضفنا course.findUnique للتحقق من الـ tenant
+// ✅ ضفنا enrollment.update لإن submitQuiz بقى بيحدّث progress الكورس
 const mockPrismaService = {
+  course: {
+    findUnique: jest.fn(),
+  },
   enrollment: {
     findUnique: jest.fn(),
+    update: jest.fn(),
   },
 };
 
@@ -86,6 +92,8 @@ describe('QuizService', () => {
     jest.clearAllMocks();
 
     mockPrismaService.enrollment.findUnique.mockResolvedValue(mockEnrollment);
+    // ✅ BE-M03: default — الكويز تابع لنفس الـ tenant
+    mockPrismaService.course.findUnique.mockResolvedValue({ tenantId: TENANT_ID });
     // FEAT-07: default — مفيش محاولات مكتملة
     mockQuizRepository.findAllCompletedAttempts.mockResolvedValue([]);
   });
@@ -114,7 +122,8 @@ describe('QuizService', () => {
     it('يرجع الكويز مع الأسئلة (مع الـ randomization)', async () => {
       const quizWithQuestions = { ...mockQuiz, questions: mockQuestions };
       repository.findByIdWithQuestions.mockResolvedValue(quizWithQuestions);
-      const result = await service.getQuizWithQuestions('quiz-123');
+      mockPrismaService.course.findUnique.mockResolvedValue({ tenantId: TENANT_ID });
+      const result = await service.getQuizWithQuestions('quiz-123', TENANT_ID);
 
       // FEAT-07: الأسئلة بتتخلط — نتحقق من المحتوى مش الترتيب
       expect(result.questions).toHaveLength(mockQuestions.length);
@@ -124,7 +133,16 @@ describe('QuizService', () => {
 
     it('يرمي NotFoundException لو الكويز مش موجود', async () => {
       repository.findByIdWithQuestions.mockResolvedValue(null);
-      await expect(service.getQuizWithQuestions('wrong-id'))
+      await expect(service.getQuizWithQuestions('wrong-id', TENANT_ID))
+        .rejects.toThrow(NotFoundException);
+    });
+
+    // ✅ BE-M03: حالة جديدة — الكويز موجود بس تابع لـ tenant تاني
+    it('يرمي NotFoundException لو الكويز تابع لمستأجر تاني', async () => {
+      const quizWithQuestions = { ...mockQuiz, questions: mockQuestions };
+      repository.findByIdWithQuestions.mockResolvedValue(quizWithQuestions);
+      mockPrismaService.course.findUnique.mockResolvedValue({ tenantId: 'other-tenant' });
+      await expect(service.getQuizWithQuestions('quiz-123', TENANT_ID))
         .rejects.toThrow(NotFoundException);
     });
 
@@ -134,7 +152,8 @@ describe('QuizService', () => {
         questions: mockQuestions.map(({ correctIndex, ...q }) => q),
       };
       repository.findByIdWithQuestions.mockResolvedValue(quizWithQuestions);
-      const result = await service.getQuizWithQuestions('quiz-123');
+      mockPrismaService.course.findUnique.mockResolvedValue({ tenantId: TENANT_ID });
+      const result = await service.getQuizWithQuestions('quiz-123', TENANT_ID);
       result.questions.forEach((q: any) => {
         expect(q.correctIndex).toBeUndefined();
       });
@@ -197,6 +216,8 @@ describe('QuizService', () => {
       repository.updateAttemptScore.mockResolvedValue({ ...mockAttempt, score: 67 });
       // FEAT-07: بعد الـ submit في الـ test، نرجع محاولة واحدة
       repository.findAllCompletedAttempts.mockResolvedValue([{ ...mockAttempt, score: 67, submittedAt: new Date() }]);
+      // ✅ جديد — submitQuiz بيستدعي enrollment.update لو النتيجة >= 70
+      mockPrismaService.enrollment.update.mockResolvedValue({});
       mockCertificatesService.issueIfPassed.mockResolvedValue(null);
       mockNotificationsService.createNotification.mockResolvedValue({});
     });

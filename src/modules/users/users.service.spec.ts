@@ -3,7 +3,7 @@ import { UsersService } from './users.service';
 import { UsersRepository } from './users.repository';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 const mockUsersRepository = {
   findAll: jest.fn(),
@@ -16,7 +16,7 @@ const mockUsersRepository = {
   countByRole: jest.fn(),
 };
 
-jest.mock('bcrypt', () => ({
+jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
   hash: jest.fn().mockResolvedValue('new_hashed_password'),
 }));

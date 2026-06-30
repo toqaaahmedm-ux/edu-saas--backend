@@ -63,11 +63,11 @@ export class AuthController {
     res.cookie('session-token', result.accessToken, ACCESS_COOKIE_OPTIONS);
     res.cookie('refresh-token', result.refreshToken, REFRESH_COOKIE_OPTIONS);
 
+    // BE-H04 FIX: ما بنرجعش accessToken ولا refreshToken في الـ body —
+    // مكشوفين لـ logging proxies. الاتنين موجودين في httpOnly cookies بس.
     return res.json({
       success: true,
       data: result.data,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     });
   }
 
@@ -91,9 +91,8 @@ export class AuthController {
     return res.json({ success: true });
   }
 
-  // ✅ BE-L04: شلنا GET /auth/me من هنا —
-  // المسار الأغنى (بيرجع من DB) موجود في UsersController على GET /me
-  // اللي بيستدعي usersService.findById(id) بدل req.user من الـ cache بس
+  // BE-L04: GET /auth/me متشالة من هنا — المسار الأغنى (بيرجع من DB)
+  // موجود في UsersController على GET /me
 
   @Public()
   @Post('superadmin/login')
@@ -105,11 +104,10 @@ export class AuthController {
     res.cookie('session-token', result.accessToken, ACCESS_COOKIE_OPTIONS);
     res.cookie('refresh-token', result.refreshToken, REFRESH_COOKIE_OPTIONS);
 
+    // BE-H04 FIX: نفس الإصلاح هنا
     return res.json({
       success: true,
       data: result.data,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     });
   }
 }
