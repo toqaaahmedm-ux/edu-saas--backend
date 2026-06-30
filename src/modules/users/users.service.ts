@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { UsersRepository } from './users.repository';
 import { Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs'; // ✅ BE-H05: bcryptjs بدل bcrypt
 
 @Injectable()
 export class UsersService {
@@ -61,7 +61,6 @@ export class UsersService {
 
     const user = await this.findById(id);
 
-    // SEC-03: لو آخر Admin في الـ tenant — مش يتحذف
     if (user.role === Role.ADMIN) {
       const adminCount = await this.usersRepository.countByRole(tenantId, Role.ADMIN);
       if (adminCount <= 1) {

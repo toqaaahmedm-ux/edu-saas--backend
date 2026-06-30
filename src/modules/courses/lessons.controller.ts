@@ -12,10 +12,9 @@ export class LessonsController {
   @Get()
   getLessons(
     @Param('courseId') courseId: string,
-    @GetUser('id') userId: string,
-    @GetUser('role') userRole: string,
+    @GetUser() user: any, // ✅ BE-M02: نجيب الـ user كاملاً
   ) {
-    return this.lessonsService.getLessons(courseId, userId, userRole);
+    return this.lessonsService.getLessons(courseId, user.id, user.role, user.tenantId); // ✅
   }
 
   @UseGuards(RolesGuard)
@@ -23,17 +22,16 @@ export class LessonsController {
   @Post()
   create(
     @Param('courseId') courseId: string,
-    @GetUser('id') userId: string,
-    @GetUser('role') userRole: string,
+    @GetUser() user: any, // ✅
     @Body() body: {
       title: string;
       videoUrl?: string;
       duration?: number;
       order: number;
-      availableAt?: string | null; // FEAT-03: ISO date string e.g. "2026-07-01T00:00:00Z"
+      availableAt?: string | null;
     },
   ) {
-    return this.lessonsService.create(courseId, userId, userRole, body);
+    return this.lessonsService.create(courseId, user.id, user.role, user.tenantId, body); // ✅
   }
 
   @UseGuards(RolesGuard)
@@ -41,17 +39,16 @@ export class LessonsController {
   @Put(':lessonId')
   update(
     @Param('lessonId') lessonId: string,
-    @GetUser('id') userId: string,
-    @GetUser('role') userRole: string,
+    @GetUser() user: any, // ✅
     @Body() body: {
       title?: string;
       videoUrl?: string;
       duration?: number;
       order?: number;
-      availableAt?: string | null; // FEAT-03
+      availableAt?: string | null;
     },
   ) {
-    return this.lessonsService.update(lessonId, userId, userRole, body);
+    return this.lessonsService.update(lessonId, user.id, user.role, user.tenantId, body); // ✅
   }
 
   @UseGuards(RolesGuard)
@@ -59,9 +56,8 @@ export class LessonsController {
   @Delete(':lessonId')
   delete(
     @Param('lessonId') lessonId: string,
-    @GetUser('id') userId: string,
-    @GetUser('role') userRole: string,
+    @GetUser() user: any, // ✅
   ) {
-    return this.lessonsService.delete(lessonId, userId, userRole);
+    return this.lessonsService.delete(lessonId, user.id, user.role, user.tenantId); // ✅
   }
 }

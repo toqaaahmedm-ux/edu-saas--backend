@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 
@@ -19,6 +20,7 @@ import * as bcrypt from 'bcryptjs';
 const HASHED = '$2b$10$hashedpassword';
 const TENANT_ID = 'tenant-123';
 const ACCESS_TOKEN = 'signed.jwt.token';
+const REFRESH_TOKEN = 'signed.refresh.token';
 
 const mockUser = {
   id: 'user-123',
@@ -52,6 +54,19 @@ const mockPrismaService = {
 
 const mockJwtService = {
   sign: jest.fn().mockReturnValue(ACCESS_TOKEN),
+  verify: jest.fn(),
+};
+
+// ✅ جديد — AuthService بقت تستخدم ConfigService لقراءة JWT_REFRESH_SECRET
+// و JWT_REFRESH_EXPIRES_IN بدل ما تكون hardcoded (BE-C01)
+const mockConfigService = {
+  get: jest.fn((key: string, defaultValue?: any) => {
+    const config: Record<string, string> = {
+      JWT_REFRESH_SECRET: 'refresh-secret-at-least-32-chars-long',
+      JWT_REFRESH_EXPIRES_IN: '7d',
+    };
+    return config[key] ?? defaultValue;
+  }),
 };
 
 const makeDto = (overrides = {}) => ({
@@ -71,6 +86,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
@@ -80,7 +96,12 @@ describe('AuthService', () => {
     // إعادة تعيين الـ default values بعد clearAllMocks
     (bcrypt.hash as jest.Mock).mockResolvedValue(HASHED);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-    mockJwtService.sign.mockReturnValue(ACCESS_TOKEN);
+    // ✅ signToken و signRefreshToken بيستخدموا sign بس بـ secrets مختلفة،
+    // فبنرجع توكنين مختلفين حسب الترتيب اللي بيتنادى بيهم في الكود:
+    // signToken (access) بيتنادى أولاً، وبعدين signRefreshToken (refresh).
+    mockJwtService.sign
+      .mockReturnValueOnce(ACCESS_TOKEN)
+      .mockReturnValueOnce(REFRESH_TOKEN);
   });
 
   it('should be defined', () => {
@@ -131,12 +152,13 @@ describe('AuthService', () => {
   // ── login ─────────────────────────────────────────────────────────────────
 
   describe('login', () => {
-    it('يرجع accessToken وبيانات المستخدم عند تسجيل دخول صحيح', async () => {
+    it('يرجع accessToken و refreshToken وبيانات المستخدم عند تسجيل دخول صحيح', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
 
       const result = await service.login(makeDto(), TENANT_ID);
 
       expect(result).toHaveProperty('accessToken', ACCESS_TOKEN);
+      expect(result).toHaveProperty('refreshToken', REFRESH_TOKEN); // ✅ جديد
       expect(result.data).toEqual({
         id: mockUser.id,
         tenantId: TENANT_ID,
@@ -144,13 +166,27 @@ describe('AuthService', () => {
         email: mockUser.email,
         role: mockUser.role,
       });
-      expect(mockJwtService.sign).toHaveBeenCalledWith(
+      expect(mockJwtService.sign).toHaveBeenNthCalledWith(
+        1,
         expect.objectContaining({
           sub: mockUser.id,
           email: mockUser.email,
           role: mockUser.role,
           tenantId: TENANT_ID,
         }),
+      );
+    });
+
+    // ✅ جديد — signRefreshToken لازم تستخدم JWT_REFRESH_SECRET من ConfigService
+    // مش الـ secret الأساسي بتاع access token (BE-C01)
+    it('يوقّع الـ refresh token بـ JWT_REFRESH_SECRET المختلف', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
+      await service.login(makeDto(), TENANT_ID);
+
+      expect(mockJwtService.sign).toHaveBeenNthCalledWith(
+        2,
+        { sub: mockUser.id },
+        expect.objectContaining({ secret: 'refresh-secret-at-least-32-chars-long' }),
       );
     });
 
@@ -173,7 +209,7 @@ describe('AuthService', () => {
   // ── loginSuperAdmin ───────────────────────────────────────────────────────
 
   describe('loginSuperAdmin', () => {
-    it('يرجع accessToken للـ superadmin بدون tenantId', async () => {
+    it('يرجع accessToken و refreshToken للـ superadmin بدون tenantId', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue(mockSuperAdmin);
 
       const result = await service.loginSuperAdmin({
@@ -182,9 +218,11 @@ describe('AuthService', () => {
       });
 
       expect(result).toHaveProperty('accessToken', ACCESS_TOKEN);
+      expect(result).toHaveProperty('refreshToken', REFRESH_TOKEN); // ✅ جديد
       expect(result.data.tenantId).toBeNull();
       expect(result.data.role).toBe('SUPER_ADMIN');
-      expect(mockJwtService.sign).toHaveBeenCalledWith(
+      expect(mockJwtService.sign).toHaveBeenNthCalledWith(
+        1,
         expect.objectContaining({ tenantId: null, role: 'SUPER_ADMIN' }),
       );
     });
@@ -194,6 +232,40 @@ describe('AuthService', () => {
       await expect(
         service.loginSuperAdmin({ email: 'student@test.com', password: '123' }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // ── refreshAccessToken (جديد بالكامل — BE-C01) ───────────────────────────
+
+  describe('refreshAccessToken', () => {
+    it('يرجع access token جديد لو الـ refresh token صحيح', async () => {
+      mockJwtService.verify.mockReturnValue({ sub: mockUser.id });
+      mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
+      // الميثود دي بتنده على signToken بس (مفيش refresh token جديد)،
+      // فبنحدد قيمة العودة بشكل صريح بدل الاعتماد على ترتيب
+      // mockReturnValueOnce الموروث من beforeEach.
+      mockJwtService.sign.mockReset().mockReturnValue(ACCESS_TOKEN);
+
+      const newToken = await service.refreshAccessToken('some.refresh.token');
+
+      expect(mockJwtService.verify).toHaveBeenCalledWith(
+        'some.refresh.token',
+        expect.objectContaining({ secret: 'refresh-secret-at-least-32-chars-long' }),
+      );
+      expect(newToken).toBe(ACCESS_TOKEN);
+    });
+
+    it('يرمي UnauthorizedException لو الـ refresh token غير صالح', async () => {
+      mockJwtService.verify.mockImplementation(() => { throw new Error('invalid signature'); });
+      await expect(service.refreshAccessToken('bad.token'))
+        .rejects.toThrow(UnauthorizedException);
+    });
+
+    it('يرمي UnauthorizedException لو المستخدم بقى محذوف من الداتابيز', async () => {
+      mockJwtService.verify.mockReturnValue({ sub: 'deleted-user-id' });
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+      await expect(service.refreshAccessToken('valid.but.user.gone'))
+        .rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -210,7 +282,8 @@ describe('AuthService', () => {
       });
 
       expect(token).toBe(ACCESS_TOKEN);
-      expect(mockJwtService.sign).toHaveBeenCalledWith(
+      expect(mockJwtService.sign).toHaveBeenNthCalledWith(
+        1,
         expect.objectContaining({
           sub: mockUser.id,
           tenantId: TENANT_ID,

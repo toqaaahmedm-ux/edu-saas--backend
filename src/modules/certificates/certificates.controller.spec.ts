@@ -119,16 +119,44 @@ describe('CertificatesController', () => {
   });
 
   describe('findOne', () => {
-    it('يرجع الشهادة بالـ id', async () => {
+    // BE-C05: findOne بقت تتطلب user (من SessionAuthGuard) وتبعته
+    // للـ service عشان يتحقق من الملكية. الطالب نفسه يقدر يشوف شهادته.
+    it('يرجع الشهادة لو الطالب صاحبها', async () => {
       service.findById.mockResolvedValue(mockCertificate);
-      const result = await controller.findOne('cert-123');
+      const result = await controller.findOne('cert-123', mockStudent);
       expect(result).toEqual(mockCertificate);
-      expect(service.findById).toHaveBeenCalledWith('cert-123');
+      expect(service.findById).toHaveBeenCalledWith(
+        'cert-123', mockStudent.tenantId, mockStudent.id, mockStudent.role,
+      );
+    });
+
+    it('يرجع الشهادة لو ADMIN في نفس المستأجر', async () => {
+      service.findById.mockResolvedValue(mockCertificate);
+      const result = await controller.findOne('cert-123', mockAdmin);
+      expect(result).toEqual(mockCertificate);
+      expect(service.findById).toHaveBeenCalledWith(
+        'cert-123', mockAdmin.tenantId, mockAdmin.id, mockAdmin.role,
+      );
     });
 
     it('يرمي NotFoundException لو الشهادة مش موجودة', async () => {
       service.findById.mockRejectedValue(new NotFoundException('Certificate not found'));
-      await expect(controller.findOne('wrong-id')).rejects.toThrow(NotFoundException);
+      await expect(controller.findOne('wrong-id', mockStudent)).rejects.toThrow(NotFoundException);
+    });
+
+    // BE-C05: لو الشهادة تبع مستأجر تاني، الـ service يرمي NotFoundException
+    // (مش ForbiddenException) عشان منكشفش معلومة وجودها عند مستأجر تاني.
+    it('يرمي NotFoundException لو الشهادة تبع مستأجر تاني', async () => {
+      service.findById.mockRejectedValue(new NotFoundException('Certificate not found'));
+      const otherTenantStudent = { id: 'student-999', tenantId: 'other-tenant', role: 'STUDENT' };
+      await expect(controller.findOne('cert-123', otherTenantStudent)).rejects.toThrow(NotFoundException);
+    });
+
+    // BE-C05: طالب تاني (مش صاحب الشهادة) في نفس المستأجر، ومش admin/teacher.
+    it('يرمي ForbiddenException لو طالب تاني مش صاحب الشهادة', async () => {
+      service.findById.mockRejectedValue(new ForbiddenException('You do not have access to this certificate'));
+      const otherStudent = { id: 'other-student', tenantId: 'tenant-123', role: 'STUDENT' };
+      await expect(controller.findOne('cert-123', otherStudent)).rejects.toThrow(ForbiddenException);
     });
   });
 

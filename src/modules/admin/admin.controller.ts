@@ -12,8 +12,10 @@ import { AdminService } from './admin.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
-import { Role, TenantStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
+import { CreateTenantDto } from './dto/create-tenant.dto'; // ✅ BE-H03
+import { UpdateTenantDto } from './dto/update-tenant.dto'; // ✅ BE-H03
 
 @Controller('admin')
 @UseGuards(RolesGuard)
@@ -40,21 +42,18 @@ export class AdminController {
   }
 
   @Post('tenants')
-  createTenant(
-    @Body() body: { name: string; subdomain: string; planId?: string },
-  ) {
-    return this.adminService.createTenant(body);
+  createTenant(@Body() dto: CreateTenantDto) { // ✅ DTO بدل body: any
+    return this.adminService.createTenant(dto);
   }
 
   @Patch('tenants/:id')
   updateTenant(
     @Param('id') id: string,
-    @Body() body: { name?: string; status?: TenantStatus; planId?: string; customDomain?: string },
+    @Body() dto: UpdateTenantDto, // ✅ DTO بدل body: any
   ) {
-    return this.adminService.updateTenant(id, body);
+    return this.adminService.updateTenant(id, dto);
   }
 
-  // ✅ AuditAction على suspend
   @AuditAction('TENANT_SUSPENDED')
   @Patch('tenants/:id/suspend')
   suspendTenant(
@@ -64,7 +63,6 @@ export class AdminController {
     return this.adminService.suspendTenant(id, user.id);
   }
 
-  // ✅ AuditAction على assignPlan
   @AuditAction('PLAN_ASSIGNED')
   @Patch('tenants/:id/plan')
   assignPlan(

@@ -2,25 +2,38 @@
   Controller, Post, Get, Body,
   Req, Res, UnauthorizedException, Headers,
 } from '@nestjs/common';
+import { ApiHeader, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import type { Request, Response } from 'express';
 
-const COOKIE_OPTIONS = {
+const ACCESS_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  maxAge: 20 * 24 * 60 * 60 * 1000,
+  maxAge: 15 * 60 * 1000,
 };
 
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/auth/refresh',
+};
+
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Public()
   @Post('register')
+  @AuditAction('USER_REGISTERED')
+  @ApiHeader({ name: 'x-tenant-id', required: true, description: 'Tenant UUID' })
   async register(
     @Body() dto: RegisterDto,
     @Headers('x-tenant-id') tenantId: string,
@@ -31,6 +44,13 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @AuditAction('USER_LOGIN')
+  @ApiHeader({
+    name: 'x-tenant-id',
+    required: false,
+    description: 'Tenant UUID — اتركيه فاضي لتسجيل دخول SuperAdmin',
+  })
+  @ApiOperation({ summary: 'Login — اتركي x-tenant-id فاضي للـ SuperAdmin' })
   async login(
     @Body() dto: LoginDto,
     @Headers('x-tenant-id') tenantId: string,
@@ -40,40 +60,56 @@ export class AuthController {
       ? await this.authService.login(dto, tenantId)
       : await this.authService.loginSuperAdmin(dto);
 
-    res.cookie('session-token', result.accessToken, COOKIE_OPTIONS);
-    return res.json({ success: true, accessToken: result.accessToken, data: result.data });
+    res.cookie('session-token', result.accessToken, ACCESS_COOKIE_OPTIONS);
+    res.cookie('refresh-token', result.refreshToken, REFRESH_COOKIE_OPTIONS);
+
+    return res.json({
+      success: true,
+      data: result.data,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    });
   }
 
-  // SEC-01 FIX: شيلنا @Public() — دلوقتي الـ refresh لازم يعدي من نفس الـ JWT guard
-  // العام زي أي route محمي. يعني التوكن القديم لازم يكون صحيح وموقّع بالسر الصح،
-  // ومش منتهي الصلاحية، قبل ما نوصل للكود ده أصلاً.
+  @Public()
   @Post('refresh')
-  async refresh(@Req() req: Request & { user: any }, @Res() res: Response) {
-    // req.user جاي من JwtStrategy.validate() بعد ما الـ guard اتأكد إن
-    // الـ JWT القديم صحيح فعلاً — مفيش أي string عشوائي يقدر يوصل هنا
-    if (!req.user) throw new UnauthorizedException();
+  async refresh(@Req() req: Request, @Res() res: Response) {
+    const refreshToken = req.cookies?.['refresh-token'];
+    if (!refreshToken) throw new UnauthorizedException('No refresh token');
 
-    const newToken = this.authService.reissueToken(req.user);
-    res.cookie('session-token', newToken, COOKIE_OPTIONS);
+    const newAccessToken = await this.authService.refreshAccessToken(refreshToken);
+
+    res.cookie('session-token', newAccessToken, ACCESS_COOKIE_OPTIONS);
     return res.json({ success: true });
   }
 
   @Post('logout')
+  @AuditAction('USER_LOGOUT')
   async logout(@Res() res: Response) {
     res.clearCookie('session-token');
+    res.clearCookie('refresh-token', { path: '/auth/refresh' });
     return res.json({ success: true });
   }
 
-  @Get('me')
-  async getMe(@Req() req: Request & { user: any }) {
-    return req.user;
-  }
+  // ✅ BE-L04: شلنا GET /auth/me من هنا —
+  // المسار الأغنى (بيرجع من DB) موجود في UsersController على GET /me
+  // اللي بيستدعي usersService.findById(id) بدل req.user من الـ cache بس
 
   @Public()
   @Post('superadmin/login')
+  @AuditAction('SUPERADMIN_LOGIN')
+  @ApiOperation({ summary: 'SuperAdmin login — بدون x-tenant-id' })
   async loginSuperAdmin(@Body() dto: LoginDto, @Res() res: Response) {
     const result = await this.authService.loginSuperAdmin(dto);
-    res.cookie('session-token', result.accessToken, COOKIE_OPTIONS);
-    return res.json({ success: true, accessToken: result.accessToken, data: result.data });
+
+    res.cookie('session-token', result.accessToken, ACCESS_COOKIE_OPTIONS);
+    res.cookie('refresh-token', result.refreshToken, REFRESH_COOKIE_OPTIONS);
+
+    return res.json({
+      success: true,
+      data: result.data,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    });
   }
 }

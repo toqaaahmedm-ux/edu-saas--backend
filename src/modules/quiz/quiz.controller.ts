@@ -17,13 +17,12 @@ export class QuizController {
 
   @Get()
   getAllQuizzes(@GetUser() user: any) {
-    // بنمرر tenantId
     return this.quizService.getAllQuizzes(user.tenantId);
   }
 
   @Get(':id')
-  getQuiz(@Param('id') id: string) {
-    return this.quizService.getQuizWithQuestions(id);
+  getQuiz(@Param('id') id: string, @GetUser() user: any) {
+    return this.quizService.getQuizWithQuestions(id, user.tenantId); // ✅ BE-M03
   }
 
   @Post(':id/start')
@@ -31,7 +30,6 @@ export class QuizController {
     @Param('id') quizId: string,
     @GetUser() user: any,
   ) {
-    // بنمرر (tenantId, userId, quizId)
     return this.quizService.startQuiz(user.tenantId, user.id, quizId);
   }
 
@@ -41,7 +39,6 @@ export class QuizController {
     @GetUser() user: any,
     @Body() body: { answers: { questionId: string; answer: number }[] },
   ) {
-    // بنمرر (tenantId, userId, quizId, answers)
     return this.quizService.submitQuiz(user.tenantId, user.id, quizId, body.answers);
   }
 }

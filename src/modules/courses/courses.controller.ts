@@ -9,13 +9,18 @@ import {
   Body,
   Query,
   UseGuards,
+  Req,
+  BadRequestException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { CoursesService } from './courses.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { FeatureGuard } from '../../common/guards/feature.guard'; // ✅ BE-H02
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequireFeature } from '../../common/decorators/require-feature.decorator';
+import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import { Role, CourseStatus } from '@prisma/client';
 
 @Controller('courses')
@@ -25,13 +30,14 @@ export class CoursesController {
   @Public()
   @Get()
   findAll(
+    @Req() req: Request,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
     @Query('search') search?: string,
     @Query('category') category?: string,
-    @GetUser() user?: any,
   ) {
-    const tenantId = user?.tenantId ?? null;
+    const tenantId = (req as any).tenantId;
+    if (!tenantId) throw new BadRequestException('Tenant context required');
     return this.coursesService.findAll(tenantId, +page, +limit, search, category);
   }
 
@@ -60,9 +66,9 @@ export class CoursesController {
     return this.coursesService.getTeacherStats(user.tenantId, user.id);
   }
 
-  // FEAT-XX: محمية بفيتشر ANALYTICS — لازم الـ tenant يكون عنده الفيتشر مفعّلة في خطته
+  // ✅ BE-H02: إضافة FeatureGuard عشان plan-based gating يشتغل فعلاً
   @RequireFeature('ANALYTICS')
-  @UseGuards(RolesGuard)
+  @UseGuards(FeatureGuard, RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Get('teacher/analytics')
   getTeacherAnalytics(@GetUser() user: any) {
@@ -89,13 +95,19 @@ export class CoursesController {
 
   @Public()
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.coursesService.findById(id);
+  findOne(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    if (!tenantId) throw new BadRequestException('Tenant context required');
+    return this.coursesService.findById(id, tenantId);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Post()
+  @AuditAction('COURSE_CREATED')
   create(
     @GetUser() user: any,
     @Body() body: {
@@ -114,10 +126,10 @@ export class CoursesController {
     });
   }
 
-  // AUTH-02: إضافة Guard على PUT :id — كان مفيش حماية خالص
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Put(':id')
+  @AuditAction('COURSE_UPDATED')
   update(
     @Param('id') id: string,
     @GetUser() user: any,
@@ -130,30 +142,40 @@ export class CoursesController {
       status?: CourseStatus;
     },
   ) {
-    return this.coursesService.update(id, user.id, user.role, body);
+    return this.coursesService.update(id, user.id, user.role, user.tenantId, body);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @Patch(':id/status')
+  @AuditAction('COURSE_STATUS_CHANGED')
   updateStatus(
     @Param('id') id: string,
+    @GetUser() user: any,
     @Body() body: { status: string },
   ) {
-    return this.coursesService.updateStatus(id, body.status as CourseStatus);
+    return this.coursesService.updateStatus(id, body.status as CourseStatus, user.tenantId);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.TEACHER)
   @Patch(':id/archive')
-  archive(@Param('id') id: string) {
-    return this.coursesService.archive(id);
+  @AuditAction('COURSE_ARCHIVED')
+  archive(
+    @Param('id') id: string,
+    @GetUser() user: any,
+  ) {
+    return this.coursesService.archive(id, user.tenantId);
   }
 
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.TEACHER)
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.coursesService.delete(id);
+  @AuditAction('COURSE_DELETED')
+  delete(
+    @Param('id') id: string,
+    @GetUser() user: any,
+  ) {
+    return this.coursesService.delete(id, user.tenantId);
   }
 }

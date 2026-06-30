@@ -5,19 +5,19 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class LessonsRepository {
   constructor(private prisma: PrismaService) {}
 
-  findByCourseId(courseId: string) {
+  findByCourseId(courseId: string, tenantId: string) { // ✅ BE-M02
     return this.prisma.lesson.findMany({
-      where: { courseId },
+      where: { courseId, tenantId }, // ✅
       orderBy: { order: 'asc' },
     });
   }
 
-  // FEAT-03: بيرجع الدروس المتاحة بس (availableAt <= now أو null)
-  findAvailableByCourseId(courseId: string) {
+  findAvailableByCourseId(courseId: string, tenantId: string) { // ✅ BE-M02
     const now = new Date();
     return this.prisma.lesson.findMany({
       where: {
         courseId,
+        tenantId, // ✅
         OR: [
           { availableAt: null },
           { availableAt: { lte: now } },
@@ -28,31 +28,39 @@ export class LessonsRepository {
   }
 
   create(data: {
+    tenantId: string; // ✅ BE-M02
     title: string;
     videoUrl?: string;
     duration?: number;
     order: number;
     courseId: string;
-    availableAt?: Date | null; // FEAT-03
+    availableAt?: Date | null;
   }) {
     return this.prisma.lesson.create({ data });
   }
 
-  update(id: string, data: {
+  update(id: string, tenantId: string, data: { // ✅ BE-M02
     title?: string;
     videoUrl?: string;
     duration?: number;
     order?: number;
-    availableAt?: Date | null; // FEAT-03
+    availableAt?: Date | null;
   }) {
-    return this.prisma.lesson.update({ where: { id }, data });
+    return this.prisma.lesson.update({
+      where: { id, tenantId }, // ✅
+      data,
+    });
   }
 
-  delete(id: string) {
-    return this.prisma.lesson.delete({ where: { id } });
+  delete(id: string, tenantId: string) { // ✅ BE-M02
+    return this.prisma.lesson.delete({
+      where: { id, tenantId }, // ✅
+    });
   }
 
-  findById(id: string) {
-    return this.prisma.lesson.findUnique({ where: { id } });
+  findById(id: string, tenantId: string) { // ✅ BE-M02
+    return this.prisma.lesson.findFirst({
+      where: { id, tenantId }, // ✅ findFirst بدل findUnique
+    });
   }
 }
