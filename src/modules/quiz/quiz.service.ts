@@ -20,21 +20,38 @@ export class QuizService {
     private readonly prisma: PrismaService,
   ) { }
 
-  async getAllQuizzes(tenantId: string) {
-    return this.quizRepository.findAllWithCourse(tenantId);
+  // ─── Student Methods ────────────────────────────────────────────────────────
+
+  // S-SEC02 fix: a student only ever sees quizzes from courses they're actually
+  // enrolled in. Passing courseId narrows it further, but it still has to be
+  // one of their enrolled courses — otherwise this throws instead of leaking
+  // quiz titles/question counts for a course they never paid for.
+  async getAllQuizzes(tenantId: string, studentId: string, courseId?: string) {
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { studentId },
+      select: { courseId: true },
+    });
+    const enrolledCourseIds = enrollments.map((e) => e.courseId);
+
+    if (courseId && !enrolledCourseIds.includes(courseId)) {
+      throw new ForbiddenException('You are not enrolled in this course');
+    }
+
+    return this.quizRepository.findAllWithCourse(tenantId, enrolledCourseIds, courseId);
   }
 
-  async getQuizWithQuestions(quizId: string, tenantId: string) { // ✅ BE-M03
-    const quiz = await this.quizRepository.findByIdWithQuestions(quizId);
+  // security fix ( B) + enrollment check: quiz is now looked up scoped to
+  // tenantId directly (no more separate course.tenantId cross-check), and we
+  // still confirm the student is enrolled before handing back any question data.
+  async getQuizWithQuestions(quizId: string, tenantId: string, studentId: string) {
+    const quiz = await this.quizRepository.findByIdWithQuestions(quizId, tenantId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
-    // ✅ BE-M03: تحقق إن الكويز تبع نفس المستأجر
-    const course = await this.prisma.course.findUnique({
-      where: { id: quiz.courseId },
-      select: { tenantId: true },
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
     });
-    if (!course || course.tenantId !== tenantId) {
-      throw new NotFoundException('Quiz not found');
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in the course to view this quiz');
     }
 
     const shuffled = [...quiz.questions].sort(() => Math.random() - 0.5);
@@ -42,7 +59,7 @@ export class QuizService {
   }
 
   async startQuiz(tenantId: string, studentId: string, quizId: string) {
-    const quiz = await this.quizRepository.findById(quizId);
+    const quiz = await this.quizRepository.findById(quizId, tenantId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -81,7 +98,7 @@ export class QuizService {
       throw new BadRequestException('No answers submitted — request rejected');
     }
 
-    const quiz = await this.quizRepository.findById(quizId);
+    const quiz = await this.quizRepository.findById(quizId, tenantId);
     if (!quiz) throw new NotFoundException('Quiz not found');
 
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -163,5 +180,103 @@ export class QuizService {
       attemptsRemaining,
       certificate: certificate ?? null,
     };
+  }
+
+  // ─── Teacher Methods (T-01 FIX) ─────────────────────────────────────────────
+
+  async createQuizWithQuestions(
+    tenantId: string,
+    instructorId: string,
+    data: {
+      courseId: string;
+      title: string;
+      timeLimit?: number;
+      passScore?: number;
+      questions: {
+        text: string;
+        options: string[];
+        correctIndex: number;
+      }[];
+    },
+  ) {
+    const course = await this.prisma.course.findUnique({
+      where: { id: data.courseId },
+      select: { tenantId: true, instructorId: true },
+    });
+
+    if (!course || course.tenantId !== tenantId) {
+      throw new NotFoundException('Course not found');
+    }
+
+    if (course.instructorId !== instructorId) {
+      throw new ForbiddenException('You can only add quizzes to your own courses');
+    }
+
+    if (!data.questions || data.questions.length === 0) {
+      throw new BadRequestException('Quiz must have at least one question');
+    }
+
+    const quiz = await this.prisma.$transaction(async (tx) => {
+      const newQuiz = await tx.quiz.create({
+        data: {
+          tenantId, // security fix (B): stamp the quiz with its tenant at creation time
+          title: data.title,
+          courseId: data.courseId,
+          timeLimit: data.timeLimit ?? 600,
+        },
+      });
+
+      await tx.question.createMany({
+        data: data.questions.map((q) => ({
+          quizId: newQuiz.id,
+          text: q.text,
+          options: q.options,
+          correctIndex: q.correctIndex,
+        })),
+      });
+
+      return newQuiz;
+    });
+
+    return { success: true, data: quiz };
+  }
+
+  async getQuizzesByCourse(courseId: string, tenantId: string, instructorId: string) {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { tenantId: true, instructorId: true },
+    });
+
+    if (!course || course.tenantId !== tenantId) {
+      throw new NotFoundException('Course not found');
+    }
+
+    if (course.instructorId !== instructorId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const quizzes = await this.prisma.quiz.findMany({
+      where: { courseId, tenantId }, // defense in depth — tenantId checked here too now, not just via course
+      include: { _count: { select: { questions: true, attempts: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { success: true, data: quizzes };
+  }
+
+  async deleteQuiz(quizId: string, tenantId: string, instructorId: string) {
+    const quiz = await this.prisma.quiz.findFirst({
+      where: { id: quizId, tenantId },
+      include: { course: { select: { instructorId: true } } },
+    });
+
+    if (!quiz) throw new NotFoundException('Quiz not found');
+
+    if (quiz.course.instructorId !== instructorId) {
+      throw new ForbiddenException('You can only delete your own quizzes');
+    }
+
+    await this.prisma.quiz.delete({ where: { id: quizId } });
+    return { success: true };
   }
 }

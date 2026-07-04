@@ -65,8 +65,7 @@ export class UsersController {
     //  بنمرر (tenantId, id, requestUserId)
     return this.usersService.delete(user.tenantId, id, user.id);
   }
-
-  @UseGuards(SessionAuthGuard, RolesGuard)
+@UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch('admin/users/:id/role')
   updateRole(
@@ -74,6 +73,7 @@ export class UsersController {
     @GetUser() user: any,
     @Body() body: { role: Role },
   ) {
-    return this.usersService.updateRole(id, body.role, user.id);
+    // passing tenantId now so the service can enforce same-tenant scope
+    return this.usersService.updateRole(id, user.tenantId, body.role, user.id);
   }
 }

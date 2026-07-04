@@ -5,9 +5,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class QuizRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAllWithCourse(tenantId: string) {
+  // S-SEC02 fix: scoped by tenantId directly now, and optionally narrowed to
+  // a specific course or a list of the student's enrolled courses.
+  async findAllWithCourse(tenantId: string, enrolledCourseIds: string[], courseId?: string) {
     return this.prisma.quiz.findMany({
-      where: { course: { tenantId } },
+      where: {
+        tenantId,
+        courseId: courseId ?? { in: enrolledCourseIds },
+      },
       include: {
         course: { select: { id: true, title: true } },
         questions: { select: { id: true } },
@@ -15,9 +20,11 @@ export class QuizRepository {
     });
   }
 
-  async findByIdWithQuestions(quizId: string) {
-    return this.prisma.quiz.findUnique({
-      where: { id: quizId },
+  // security fix (ب): tenantId is now part of the lookup itself, not a
+  // separate check done after the fact in the service.
+  async findByIdWithQuestions(quizId: string, tenantId: string) {
+    return this.prisma.quiz.findFirst({
+      where: { id: quizId, tenantId },
       include: {
         questions: {
           select: {
@@ -31,8 +38,8 @@ export class QuizRepository {
     });
   }
 
-  async findById(quizId: string) {
-    return this.prisma.quiz.findUnique({ where: { id: quizId } });
+  async findById(quizId: string, tenantId: string) {
+    return this.prisma.quiz.findFirst({ where: { id: quizId, tenantId } });
   }
 
   async findQuestionsByQuizId(quizId: string) {
@@ -52,7 +59,6 @@ export class QuizRepository {
     });
   }
 
-  // FEAT-07: جيب كل المحاولات المكتملة
   async findAllCompletedAttempts(studentId: string, quizId: string) {
     return this.prisma.quizAttempt.findMany({
       where: { studentId, quizId, submittedAt: { not: null } },

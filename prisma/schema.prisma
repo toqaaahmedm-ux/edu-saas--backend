@@ -55,6 +55,7 @@ model Tenant {
   owner         User?          @relation("TenantOwner", fields: [ownerUserId], references: [id])
   users         User[]         @relation("TenantUsers")
   courses       Course[]
+  quizzes       Quiz[]
   lessons       Lesson[]       // ✅ BE-M02: إضافة relation
   enrollments   Enrollment[]
   quizAttempts  QuizAttempt[]
@@ -219,19 +220,26 @@ model Lesson {
   @@index([courseId])
 }
 
-model Quiz {
+
+  model Quiz {
   id        String   @id @default(uuid())
+  tenantId  String                             // security fix (ب): quiz is now scoped directly by tenant, not just indirectly via courseId
   title     String
   timeLimit Int      @default(600)
   courseId  String
   createdAt DateTime @default(now())
 
+tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
   questions Question[]
   attempts  QuizAttempt[]
 
+  @@index([tenantId])
   @@index([courseId])
+  @@index([tenantId, courseId])
 }
+
+
 
 model Question {
   id           String   @id @default(uuid())

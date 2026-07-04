@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { UsersRepository } from './users.repository';
 import { Role } from '@prisma/client';
-import * as bcrypt from 'bcryptjs'; // ✅ BE-H05: bcryptjs بدل bcrypt
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
@@ -46,11 +46,29 @@ export class UsersService {
     return { message: 'Password updated successfully' };
   }
 
-  async updateRole(id: string, role: Role, requestUserId: string) {
+  // Security fix (أ): this endpoint is tenant-scoped and admin-triggered, so it
+  // should never be able to touch SUPER_ADMIN in either direction — not assign it,
+  // and not modify an existing one. Also locking it to same-tenant users only,
+  // since an ADMIN has no business reaching into another tenant's user table.
+  async updateRole(id: string, tenantId: string, role: Role, requestUserId: string) {
     if (id === requestUserId) {
       throw new ForbiddenException('You cannot change your own role');
     }
-    await this.findById(id);
+
+    if (role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('SUPER_ADMIN cannot be assigned from this endpoint');
+    }
+
+    const targetUser = await this.findById(id);
+
+    if (targetUser.tenantId !== tenantId) {
+      throw new ForbiddenException('You cannot modify a user outside your tenant');
+    }
+
+    if (targetUser.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('You cannot change a SUPER_ADMIN role');
+    }
+
     return this.usersRepository.updateRole(id, role);
   }
 

@@ -295,14 +295,13 @@ async function main() {
   console.log("🎬 Created 11 lessons");
 
   // ─── 12. Quizzes ──────────────────────────────────────────────
-  const quiz1 = await prisma.quiz.create({
-    data: { title: "اختبار أساسيات JavaScript", timeLimit: 600, courseId: course1.id },
-  });
+const quiz1 = await prisma.quiz.create({
+  data: { title: "اختبار أساسيات JavaScript", timeLimit: 600, courseId: course1.id, tenantId: tenant1.id },
+});
 
-  const quiz2 = await prisma.quiz.create({
-    data: { title: "اختبار UI/UX Basics", timeLimit: 480, courseId: course3.id },
-  });
-
+const quiz2 = await prisma.quiz.create({
+  data: { title: "اختبار UI/UX Basics", timeLimit: 480, courseId: course3.id, tenantId: tenant2.id },
+});
   console.log("📝 Created 2 quizzes");
 
   // ─── 13. Questions ────────────────────────────────────────────
