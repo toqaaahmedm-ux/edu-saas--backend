@@ -1,10 +1,19 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TenantStatus } from '@prisma/client';
+import { BillingService } from '../billing/billing.service';
+import { MailService } from '../mail/mail.service';
+import { TenantStatus, Role } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
+
+const TRIAL_DAYS = 14;
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+ constructor(
+    private readonly prisma: PrismaService,
+    private readonly billingService: BillingService,
+    private readonly mailService: MailService,
+  ) {}
 
   // ─── Tenant CRUD ─────────────────────────────────────
 
@@ -38,28 +47,67 @@ export class AdminService {
     return tenant;
   }
 
+  // SA-C01 fix: creates the Tenant AND its first ADMIN (owner) atomically.
   async createTenant(data: {
     name: string;
     subdomain: string;
     planId?: string;
-    ownerEmail?: string;
-    ownerName?: string;
-    ownerPassword?: string;
+    ownerName: string;
+    ownerEmail: string;
+    ownerPassword: string;
   }) {
-    const existing = await this.prisma.tenant.findUnique({
+    const existingTenant = await this.prisma.tenant.findUnique({
       where: { subdomain: data.subdomain },
     });
-    if (existing) throw new BadRequestException('Subdomain already taken');
+    if (existingTenant) throw new BadRequestException('Subdomain already taken');
 
-    return this.prisma.tenant.create({
-      data: {
-        name: data.name,
-        subdomain: data.subdomain,
-        planId: data.planId ?? null,
-        status: TenantStatus.TRIAL,
-      },
-      include: { plan: { select: { id: true, name: true } } },
+    const existingOwner = await this.prisma.user.findFirst({
+      where: { email: data.ownerEmail },
     });
+    if (existingOwner) throw new BadRequestException('Owner email already in use');
+
+    const hashedPassword = await bcrypt.hash(data.ownerPassword, 10);
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
+
+    const tenant = await this.prisma.$transaction(async (tx) => {
+      const newTenant = await tx.tenant.create({
+        data: {
+          name: data.name,
+          subdomain: data.subdomain,
+          planId: data.planId ?? null,
+          status: TenantStatus.TRIAL,
+          trialEndsAt,
+        },
+      });
+
+      const owner = await tx.user.create({
+        data: {
+          tenantId: newTenant.id,
+          name: data.ownerName,
+          email: data.ownerEmail,
+          hashedPassword,
+          role: Role.ADMIN,
+        },
+      });
+
+      return tx.tenant.update({
+        where: { id: newTenant.id },
+        data: { ownerUserId: owner.id },
+        include: { plan: { select: { id: true, name: true } }, owner: true },
+      });
+    });
+
+   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    this.mailService
+      .sendTenantWelcome(tenant.owner!.email, {
+        tenantName: tenant.name,
+        ownerName: tenant.owner!.name,
+        loginUrl: `${frontendUrl}/login`,
+      })
+      .catch(() => {});
+
+    return tenant;
   }
 
   async updateTenant(id: string, data: {
@@ -76,27 +124,21 @@ export class AdminService {
     });
   }
 
+ // Sprint 1 fix: removed the manual auditLog.create call here — @AuditAction
+  // on the controller (admin.controller.ts) already logs this via the
+  // interceptor. Keeping both was writing two audit rows per suspend action.
   async suspendTenant(id: string, actorId: string) {
     await this.findTenantById(id);
-    const tenant = await this.prisma.tenant.update({
+    return this.prisma.tenant.update({
       where: { id },
       data: { status: TenantStatus.SUSPENDED },
     });
-    await this.prisma.auditLog.create({
-      data: { actorId, action: 'TENANT_SUSPENDED', target: id, tenantId: id },
-    });
-    return tenant;
   }
 
+  // SA-C02 fix: بدل ما يحدّث tenant.planId لوحده، بقى بيستخدم BillingService
+  // كمصدر قانوني واحد بيحدّث tenant.planId و Subscription مع بعض في transaction واحدة
   async assignPlan(tenantId: string, planId: string, actorId: string) {
-    const plan = await this.prisma.plan.findUnique({ where: { id: planId } });
-    if (!plan) throw new NotFoundException('Plan not found');
-
-    const tenant = await this.prisma.tenant.update({
-      where: { id: tenantId },
-      data: { planId },
-      include: { plan: { select: { id: true, name: true } } },
-    });
+    const { tenant } = await this.billingService.assignPlanToTenant(tenantId, planId);
 
     await this.prisma.auditLog.create({
       data: {
@@ -104,7 +146,7 @@ export class AdminService {
         action: 'PLAN_ASSIGNED',
         target: tenantId,
         tenantId,
-        metadata: { planId, planName: plan.name },
+        metadata: { planId, planName: tenant.plan?.name },
       },
     });
 
@@ -119,7 +161,7 @@ export class AdminService {
         this.prisma.user.count({ where: { tenantId } }),
         this.prisma.course.count({ where: { tenantId } }),
         this.prisma.enrollment.count({ where: { tenantId } }),
-        Promise.resolve(0), // placeholder — wire to MediaAsset when built
+        Promise.resolve(0),
       ]);
 
     const tenant = await this.prisma.tenant.findUnique({

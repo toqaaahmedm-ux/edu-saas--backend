@@ -6,6 +6,8 @@ import { ApiHeader, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import type { Request, Response } from 'express';
@@ -28,7 +30,7 @@ const REFRESH_COOKIE_OPTIONS = {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @Public()
   @Post('register')
@@ -48,9 +50,9 @@ export class AuthController {
   @ApiHeader({
     name: 'x-tenant-id',
     required: false,
-    description: 'Tenant UUID — اتركيه فاضي لتسجيل دخول SuperAdmin',
+    description: 'Tenant UUID — required for tenant users (Admin/Teacher/Student). Leave empty only for SuperAdmin login.',
   })
-  @ApiOperation({ summary: 'Login — اتركي x-tenant-id فاضي للـ SuperAdmin' })
+  @ApiOperation({ summary: 'Login — provide x-tenant-id for tenant users; leave empty for SuperAdmin' })
   async login(
     @Body() dto: LoginDto,
     @Headers('x-tenant-id') tenantId: string,
@@ -109,5 +111,20 @@ export class AuthController {
       success: true,
       data: result.data,
     });
+  }
+
+  // Email infrastructure fix: password reset flow didn't exist at all.
+  @Public()
+  @Post('forgot-password')
+  @AuditAction('PASSWORD_RESET_REQUESTED')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @AuditAction('PASSWORD_RESET_COMPLETED')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 }

@@ -22,10 +22,9 @@ export class QuizService {
 
   // ─── Student Methods ────────────────────────────────────────────────────────
 
-  // S-SEC02 fix: a student only ever sees quizzes from courses they're actually
-  // enrolled in. Passing courseId narrows it further, but it still has to be
-  // one of their enrolled courses — otherwise this throws instead of leaking
-  // quiz titles/question counts for a course they never paid for.
+  // Students only see quizzes from courses they're enrolled in.
+  // If a courseId filter is passed, we still verify it's one of their
+  // enrolled courses before returning anything — no peeking at other courses.
   async getAllQuizzes(tenantId: string, studentId: string, courseId?: string) {
     const enrollments = await this.prisma.enrollment.findMany({
       where: { studentId },
@@ -40,9 +39,9 @@ export class QuizService {
     return this.quizRepository.findAllWithCourse(tenantId, enrolledCourseIds, courseId);
   }
 
-  // security fix ( B) + enrollment check: quiz is now looked up scoped to
-  // tenantId directly (no more separate course.tenantId cross-check), and we
-  // still confirm the student is enrolled before handing back any question data.
+  // Quiz lookup is scoped to tenantId so a student from tenant A can never
+  // pull a quiz from tenant B, even if they somehow know the ID.
+  // We also check enrollment before returning any question data.
   async getQuizWithQuestions(quizId: string, tenantId: string, studentId: string) {
     const quiz = await this.quizRepository.findByIdWithQuestions(quizId, tenantId);
     if (!quiz) throw new NotFoundException('Quiz not found');
@@ -77,6 +76,7 @@ export class QuizService {
       );
     }
 
+    // clean up any abandoned attempt before starting a fresh one
     await this.quizRepository.deleteIncompleteAttempt(studentId, quizId);
     const attempt = await this.quizRepository.createAttempt(tenantId, studentId, quizId);
 
@@ -112,6 +112,7 @@ export class QuizService {
     if (!attempt) throw new BadRequestException('You must start the quiz first');
     if (attempt.submittedAt) throw new BadRequestException('Quiz already submitted');
 
+    // give a 5-second grace period for network lag before rejecting a late submission
     if (quiz.timeLimit) {
       const elapsed = (Date.now() - attempt.startedAt.getTime()) / 1000;
       if (elapsed > quiz.timeLimit + 5) {
@@ -148,6 +149,8 @@ export class QuizService {
 
     let certificate = null;
     if (quiz.courseId && score >= 70) {
+      // mark the enrollment complete before trying to issue a certificate,
+      // otherwise the certificate service might see an incomplete enrollment
       await this.prisma.enrollment.update({
         where: {
           studentId_courseId: { studentId, courseId: quiz.courseId },
@@ -182,7 +185,7 @@ export class QuizService {
     };
   }
 
-  // ─── Teacher Methods (T-01 FIX) ─────────────────────────────────────────────
+  // ─── Teacher Methods ─────────────────────────────────────────────────────────
 
   async createQuizWithQuestions(
     tenantId: string,
@@ -199,6 +202,7 @@ export class QuizService {
       }[];
     },
   ) {
+    // make sure the course exists in this tenant and belongs to this teacher
     const course = await this.prisma.course.findUnique({
       where: { id: data.courseId },
       select: { tenantId: true, instructorId: true },
@@ -216,13 +220,16 @@ export class QuizService {
       throw new BadRequestException('Quiz must have at least one question');
     }
 
+    // wrap quiz + questions in a transaction so we never end up with a
+    // quiz row that has no questions if createMany fails halfway through
     const quiz = await this.prisma.$transaction(async (tx) => {
       const newQuiz = await tx.quiz.create({
         data: {
-          tenantId, // security fix (B): stamp the quiz with its tenant at creation time
+          tenantId,
           title: data.title,
           courseId: data.courseId,
           timeLimit: data.timeLimit ?? 600,
+          passScore: data.passScore ?? 70, // was missing before — frontend value was silently dropped
         },
       });
 
@@ -256,7 +263,7 @@ export class QuizService {
     }
 
     const quizzes = await this.prisma.quiz.findMany({
-      where: { courseId, tenantId }, // defense in depth — tenantId checked here too now, not just via course
+      where: { courseId, tenantId },
       include: { _count: { select: { questions: true, attempts: true } } },
       orderBy: { createdAt: 'desc' },
     });

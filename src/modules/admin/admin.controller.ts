@@ -41,15 +41,18 @@ export class AdminController {
     return this.adminService.findTenantById(id);
   }
 
+  @AuditAction('TENANT_CREATED')
   @Post('tenants')
-  createTenant(@Body() dto: CreateTenantDto) { // ✅ DTO بدل body: any
+  createTenant(@Body() dto: CreateTenantDto) {
     return this.adminService.createTenant(dto);
   }
 
+  
+  @AuditAction('TENANT_UPDATED')
   @Patch('tenants/:id')
   updateTenant(
     @Param('id') id: string,
-    @Body() dto: UpdateTenantDto, // ✅ DTO بدل body: any
+    @Body() dto: UpdateTenantDto,
   ) {
     return this.adminService.updateTenant(id, dto);
   }

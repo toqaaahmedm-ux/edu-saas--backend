@@ -40,6 +40,14 @@ enum BillingCycle {
   ANNUAL
 }
 
+
+enum TenantType {
+  TUTOR      
+  SCHOOL       
+  UNIVERSITY   
+  CENTER       
+}
+
 model Tenant {
   id            String       @id @default(uuid())
   name          String
@@ -48,8 +56,14 @@ model Tenant {
   status        TenantStatus @default(TRIAL)
   ownerUserId   String?      @unique
   planId        String?
+  trialEndsAt   DateTime?                          // SA-C01 fix: tracks when the TRIAL status should convert/expire
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+ 
+  type           TenantType @default(TUTOR)
+  gradeScale     String     @default("PERCENT_AF")  // PERCENT_AF | GPA_4 | CUSTOM
+  academicConfig Json?                             
 
   plan          Plan?          @relation(fields: [planId], references: [id])
   owner         User?          @relation("TenantOwner", fields: [ownerUserId], references: [id])
@@ -156,11 +170,13 @@ model User {
   hashedPassword String
   role           Role     @default(STUDENT)
   avatar         String?
+  emailVerified  Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   tenant      Tenant?       @relation("TenantUsers", fields: [tenantId], references: [id], onDelete: Cascade)
   ownedTenant Tenant?       @relation("TenantOwner")
+  verificationTokens VerificationToken[]
 
   courses       Course[]
   enrollments   Enrollment[]
@@ -339,4 +355,23 @@ model Notification {
 
   @@index([tenantId])
   @@index([userId])
+}
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+model VerificationToken {
+  id        String                @id @default(uuid())
+  userId    String
+  token     String                @unique
+  type      VerificationTokenType
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
 }

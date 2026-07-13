@@ -7,13 +7,15 @@ import {
 import { CoursesRepository } from './courses.repository';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CourseStatus } from '@prisma/client';
+import { BillingService } from '../billing/billing.service';
 
 @Injectable()
 export class CoursesService {
   constructor(
     private readonly coursesRepository: CoursesRepository,
     private readonly prisma: PrismaService,
-  ) {}
+    private readonly billingService: BillingService,
+  ) { }
 
   async findAll(
     tenantId: string,
@@ -32,9 +34,6 @@ export class CoursesService {
     };
   }
 
-  // PERF-17 FIX: قبل كده كنا بنجيب كل الكورسات للذاكرة بـ findAllAdmin()
-  // من غير skip/take، وبعدين نعمل .slice() في Node.js. دلوقتي بنمرر
-  // skip/take للـ repository مباشرة عشان الـ DB هي اللي تعمل الـ pagination.
   async findAllAdmin(tenantId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
     const { courses, total } = await this.coursesRepository.findAllAdmin(
@@ -46,11 +45,6 @@ export class CoursesService {
     };
   }
 
-  // BE-C03 FIX: tenantId بقى اختياري لكن لازم يتمرر من كل الـ callers
-  // اللي عندهم سياق tenant فعلي (الكونترولر بقى بيقرأه من TenantMiddleware
-  // ويبعته هنا). لو الكورس موجود لكن تبع مستأجر تاني، الـ repository
-  // هيرجع null والـ service هيرمي NotFoundException بالظبط زي حالة
-  // "الكورس مش موجود خالص" — ده يمنع تسريب معلومة وجود الكورس لمستأجرين تانيين.
   async findById(id: string, tenantId?: string) {
     const course = await this.coursesRepository.findById(id, tenantId);
     if (!course) throw new NotFoundException('Course not found');
@@ -69,14 +63,30 @@ export class CoursesService {
     if (!data.title?.trim()) throw new BadRequestException('Title is required');
     if (!data.description?.trim()) throw new BadRequestException('Description is required');
     if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
-    return this.coursesRepository.create(data);
+
+    // Plan limits enforcement: mirrors the maxStudents check already done
+    // in EnrollmentsService — same transaction pattern to avoid a race
+    // condition where two concurrent requests both pass the count check
+    // before either course is actually created.
+    const subscription = await this.billingService.getTenantSubscription(data.tenantId);
+
+    return this.prisma.$transaction(async (tx) => {
+      if (subscription) {
+        const maxCourses = subscription.plan.maxCourses;
+        const currentCourses = await tx.course.count({
+          where: { tenantId: data.tenantId },
+        });
+        if (currentCourses >= maxCourses) {
+          throw new BadRequestException(
+            `Course limit reached (${maxCourses}). Please upgrade your plan.`,
+          );
+        }
+      }
+
+      return tx.course.create({ data });
+    });
   }
 
-  // BE-C04 FIX: tenantId بقى بارامتر خامس — بيتحقق إن الكورس تبع نفس
-  // مستأجر الـ admin/teacher الطالب التعديل قبل ما يوصل لفحص الملكية
-  // (owner check). كمان بيتمرر للـ repository نفسها كطبقة حماية ثانية
-  // على مستوى الاستعلام (defense in depth) — حتى لو فات الفحص هنا بطريقة
-  // ما، الـ DB query نفسه مش هيلاقي صف يطابق tenantId مختلف.
   async update(
     id: string,
     requestUserId: string,
@@ -145,10 +155,25 @@ export class CoursesService {
       where: { courseId: { in: courseIds } },
     });
 
+    // T-07 FIX: avgRating replaced with completionRate — there's no Rating
+    // model in the DB so avgRating always returned 0 and was misleading.
+    // completionRate is calculated from real enrollment data we already have.
+    const completedEnrollments = await this.prisma.enrollment.count({
+      where: {
+        courseId: { in: courseIds },
+        status: 'COMPLETED',
+      },
+    });
+
+    const completionRate = totalStudents > 0
+      ? Math.round((completedEnrollments / totalStudents) * 100)
+      : 0;
+
     return {
       totalStudents,
       publishedCourses,
       activeQuizzes,
+      completionRate,// T-07 FIX: real metric instead of non-existent avgRating
     };
   }
 
@@ -167,7 +192,7 @@ export class CoursesService {
     });
 
     const excellent = attempts.filter((a) => a.score >= 85).length;
-    const good      = attempts.filter((a) => a.score >= 60 && a.score < 85).length;
+    const good = attempts.filter((a) => a.score >= 60 && a.score < 85).length;
     const needsWork = attempts.filter((a) => a.score < 60).length;
 
     const monthlyMap: Record<string, { total: number; count: number }> = {};
@@ -187,8 +212,8 @@ export class CoursesService {
     return {
       performanceTrend: performanceTrend.length > 0 ? performanceTrend : [{ month: 'No data', score: 0 }],
       quizDistribution: [
-        { name: 'Excellent',         value: excellent },
-        { name: 'Good',              value: good },
+        { name: 'Excellent', value: excellent },
+        { name: 'Good', value: good },
         { name: 'Needs Improvement', value: needsWork },
       ],
     };
@@ -209,9 +234,105 @@ export class CoursesService {
   }
 
   async getAdminStats(tenantId: string) {
-    const totalCourses  = await this.coursesRepository.countAll(tenantId);
+    const totalCourses = await this.coursesRepository.countAll(tenantId);
     const totalStudents = await this.coursesRepository.countStudents(tenantId);
-    const totalRevenue  = await this.coursesRepository.sumRevenue(tenantId);
+    const totalRevenue = await this.coursesRepository.sumRevenue(tenantId);
     return { totalCourses, totalStudents, totalRevenue };
+  }
+  // ─── Lesson Methods (T-04) ────────────────────────────────────────────────
+
+  async createLesson(
+    courseId: string,
+    tenantId: string,
+    instructorId: string,
+    data: {
+      title: string;
+      videoUrl?: string;
+      duration?: number;
+      order?: number;
+      availableAt?: string;
+    },
+  ) {
+    const course = await this.findById(courseId, tenantId);
+    if (course.instructorId !== instructorId) {
+      throw new ForbiddenException('You do not own this course');
+    }
+
+    // if no order given, put it at the end
+    let order = data.order;
+    if (order === undefined) {
+      const lastLesson = await this.prisma.lesson.findFirst({
+        where: { courseId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+      order = (lastLesson?.order ?? 0) + 1;
+    }
+
+    return this.prisma.lesson.create({
+      data: {
+        title: data.title,
+        videoUrl: data.videoUrl,
+        duration: data.duration ?? 0,
+        order,
+        courseId,
+        tenantId,
+        availableAt: data.availableAt ? new Date(data.availableAt) : null,
+      },
+    });
+  }
+
+  async getLessons(courseId: string, tenantId: string, instructorId: string) {
+    const course = await this.findById(courseId, tenantId);
+    if (course.instructorId !== instructorId) {
+      throw new ForbiddenException('You do not own this course');
+    }
+
+    return this.prisma.lesson.findMany({
+      where: { courseId, tenantId },
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  async updateLesson(
+    lessonId: string,
+    courseId: string,
+    tenantId: string,
+    instructorId: string,
+    data: {
+      title?: string;
+      videoUrl?: string;
+      duration?: number;
+      order?: number;
+      availableAt?: string;
+    },
+  ) {
+    const course = await this.findById(courseId, tenantId);
+    if (course.instructorId !== instructorId) {
+      throw new ForbiddenException('You do not own this course');
+    }
+
+    return this.prisma.lesson.update({
+      where: { id: lessonId },
+      data: {
+        ...data,
+        availableAt: data.availableAt ? new Date(data.availableAt) : undefined,
+      },
+    });
+  }
+
+  async deleteLesson(
+    lessonId: string,
+    courseId: string,
+    tenantId: string,
+    instructorId: string,
+  ) {
+    const course = await this.findById(courseId, tenantId);
+    if (course.instructorId !== instructorId) {
+      throw new ForbiddenException('You do not own this course');
+    }
+
+    await this.prisma.lesson.delete({ where: { id: lessonId } });
+    return { message: 'Lesson deleted successfully' };
   }
 }

@@ -22,6 +22,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { RequireFeature } from '../../common/decorators/require-feature.decorator';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import { Role, CourseStatus } from '@prisma/client';
+import { CreateCourseDto } from './dto/create-course.dto';
 
 @Controller('courses')
 export class CoursesController {
@@ -104,20 +105,13 @@ export class CoursesController {
     return this.coursesService.findById(id, tenantId);
   }
 
-  @UseGuards(RolesGuard)
+ @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Post()
   @AuditAction('COURSE_CREATED')
   create(
     @GetUser() user: any,
-    @Body() body: {
-      title: string;
-      description: string;
-      thumbnail?: string;
-      category?: string;
-      price?: number;
-      videoUrl?: string;
-    },
+    @Body() body: CreateCourseDto,
   ) {
     return this.coursesService.create({
       ...body,
@@ -178,4 +172,62 @@ export class CoursesController {
   ) {
     return this.coursesService.delete(id, user.tenantId);
   }
+  // ─── Lesson Endpoints (T-04) ──────────────────────────────────────────────
+
+@UseGuards(RolesGuard)
+@Roles(Role.TEACHER, Role.ADMIN)
+@Post(':id/lessons')
+@AuditAction('LESSON_CREATED')
+createLesson(
+  @Param('id') courseId: string,
+  @GetUser() user: any,
+  @Body() body: {
+    title: string;
+    videoUrl?: string;
+    duration?: number;
+    order?: number;
+    availableAt?: string;
+  },
+) {
+  return this.coursesService.createLesson(courseId, user.tenantId, user.id, body);
+}
+
+@UseGuards(RolesGuard)
+@Roles(Role.TEACHER, Role.ADMIN)
+@Get(':id/lessons')
+getLessons(
+  @Param('id') courseId: string,
+  @GetUser() user: any,
+) {
+  return this.coursesService.getLessons(courseId, user.tenantId, user.id);
+}
+
+@UseGuards(RolesGuard)
+@Roles(Role.TEACHER, Role.ADMIN)
+@Patch(':id/lessons/:lessonId')
+updateLesson(
+  @Param('id') courseId: string,
+  @Param('lessonId') lessonId: string,
+  @GetUser() user: any,
+  @Body() body: {
+    title?: string;
+    videoUrl?: string;
+    duration?: number;
+    order?: number;
+    availableAt?: string;
+  },
+) {
+  return this.coursesService.updateLesson(lessonId, courseId, user.tenantId, user.id, body);
+}
+
+@UseGuards(RolesGuard)
+@Roles(Role.TEACHER, Role.ADMIN)
+@Delete(':id/lessons/:lessonId')
+deleteLesson(
+  @Param('id') courseId: string,
+  @Param('lessonId') lessonId: string,
+  @GetUser() user: any,
+) {
+  return this.coursesService.deleteLesson(lessonId, courseId, user.tenantId, user.id);
+}
 }

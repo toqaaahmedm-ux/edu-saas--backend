@@ -1,3 +1,4 @@
+
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -17,6 +18,7 @@ import { SessionAuthGuard } from './common/guards/session-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   imports: [
@@ -44,6 +46,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
         CLOUDINARY_CLOUD_NAME: Joi.string().required(),
         CLOUDINARY_API_KEY: Joi.string().required(),
         CLOUDINARY_API_SECRET: Joi.string().required(),
+        RESEND_API_KEY: Joi.string().required(),
       }),
       validationOptions: {
         // نجمع كل الأخطاء مرة واحدة بدل ما نوقف عند أول واحد بس —
@@ -66,6 +69,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     CertificatesModule,
     UploadModule,
     NotificationsModule,
+    MailModule,
   ],
   providers: [
     {
