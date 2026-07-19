@@ -59,6 +59,7 @@ export class CoursesService {
     thumbnail?: string;
     category?: string;
     price?: number;
+    videoUrl?: string; // T-02 FIX: allow videoUrl on create too, for consistency
   }) {
     if (!data.title?.trim()) throw new BadRequestException('Title is required');
     if (!data.description?.trim()) throw new BadRequestException('Description is required');
@@ -87,6 +88,13 @@ export class CoursesService {
     });
   }
 
+  // T-02 FIX: `data` did not declare `videoUrl` in its type, even though
+  // the value survives fine at runtime (this is a plain object, not a
+  // class-validated DTO, so TypeScript's structural typing doesn't strip
+  // it). The real drop happened one layer down, in
+  // CoursesRepository.update(), which destructured a fixed set of fields.
+  // Declaring videoUrl here too keeps this function's type signature
+  // honest about what it actually forwards to the repository.
   async update(
     id: string,
     requestUserId: string,
@@ -99,6 +107,7 @@ export class CoursesService {
       category?: string;
       price?: number;
       status?: CourseStatus;
+      videoUrl?: string; // T-02 FIX
     },
   ) {
     const course = await this.findById(id, tenantId);
@@ -173,7 +182,7 @@ export class CoursesService {
       totalStudents,
       publishedCourses,
       activeQuizzes,
-      completionRate,// T-07 FIX: real metric instead of non-existent avgRating
+      completionRate, // T-07 FIX: real metric instead of non-existent avgRating
     };
   }
 

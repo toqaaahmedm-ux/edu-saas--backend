@@ -62,9 +62,35 @@ export class EnrollmentsService {
         }
       }
 
-      return tx.enrollment.create({
+      const created = await tx.enrollment.create({
         data: { tenantId, studentId, courseId },
       });
+
+      // NEW: link the student to the course's class section (if it has one).
+      // This is what makes attendance rolls, section-wide announcements,
+      // etc. show the right roster once a student enrolls in a SCHOOL/
+      // UNIVERSITY-type course that's tied to a specific section.
+      //
+      // Note: User.classSectionId is a single field (a student belongs to
+      // one section at a time), not a list. If the student is already
+      // linked to a *different* section, we deliberately don't overwrite
+      // it here — enrolling in a course shouldn't silently move someone
+      // out of their existing homeroom. We only fill it in when it's empty.
+      if (course.classSectionId) {
+        const student = await tx.user.findUnique({
+          where: { id: studentId },
+          select: { classSectionId: true },
+        });
+
+        if (student && !student.classSectionId) {
+          await tx.user.update({
+            where: { id: studentId },
+            data: { classSectionId: course.classSectionId },
+          });
+        }
+      }
+
+      return created;
     });
 
     await this.notificationsService.createNotification({

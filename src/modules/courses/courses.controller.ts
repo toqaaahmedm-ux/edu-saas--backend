@@ -15,7 +15,7 @@ import {
 import { Request } from 'express';
 import { CoursesService } from './courses.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { FeatureGuard } from '../../common/guards/feature.guard'; // ✅ BE-H02
+import { FeatureGuard } from '../../common/guards/feature.guard'; // BE-H02
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -67,7 +67,7 @@ export class CoursesController {
     return this.coursesService.getTeacherStats(user.tenantId, user.id);
   }
 
-  // ✅ BE-H02: إضافة FeatureGuard عشان plan-based gating يشتغل فعلاً
+  // BE-H02: added FeatureGuard so plan-based gating actually works
   @RequireFeature('ANALYTICS')
   @UseGuards(FeatureGuard, RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
@@ -105,7 +105,7 @@ export class CoursesController {
     return this.coursesService.findById(id, tenantId);
   }
 
- @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Post()
   @AuditAction('COURSE_CREATED')
@@ -120,6 +120,14 @@ export class CoursesController {
     });
   }
 
+  // T-02 FIX: this endpoint never used a class-validated DTO — the body
+  // was typed with an inline TypeScript object literal that did not
+  // declare `videoUrl`. Because this is a plain object type (not a
+  // class), NestJS's ValidationPipe whitelist stripping does not apply
+  // here, so videoUrl was actually still reaching this handler at
+  // runtime — the type annotation just didn't say so, and the real drop
+  // happened further down in CoursesRepository.update(). Adding
+  // `videoUrl` here keeps the type signature accurate and self-documenting.
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Put(':id')
@@ -134,6 +142,7 @@ export class CoursesController {
       category?: string;
       price?: number;
       status?: CourseStatus;
+      videoUrl?: string; // T-02 FIX
     },
   ) {
     return this.coursesService.update(id, user.id, user.role, user.tenantId, body);
@@ -172,62 +181,62 @@ export class CoursesController {
   ) {
     return this.coursesService.delete(id, user.tenantId);
   }
-  // ─── Lesson Endpoints (T-04) ──────────────────────────────────────────────
+  // ─── Lesson Endpoints (T-04) ────────────────────────────────────────────
 
-@UseGuards(RolesGuard)
-@Roles(Role.TEACHER, Role.ADMIN)
-@Post(':id/lessons')
-@AuditAction('LESSON_CREATED')
-createLesson(
-  @Param('id') courseId: string,
-  @GetUser() user: any,
-  @Body() body: {
-    title: string;
-    videoUrl?: string;
-    duration?: number;
-    order?: number;
-    availableAt?: string;
-  },
-) {
-  return this.coursesService.createLesson(courseId, user.tenantId, user.id, body);
-}
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Post(':id/lessons')
+  @AuditAction('LESSON_CREATED')
+  createLesson(
+    @Param('id') courseId: string,
+    @GetUser() user: any,
+    @Body() body: {
+      title: string;
+      videoUrl?: string;
+      duration?: number;
+      order?: number;
+      availableAt?: string;
+    },
+  ) {
+    return this.coursesService.createLesson(courseId, user.tenantId, user.id, body);
+  }
 
-@UseGuards(RolesGuard)
-@Roles(Role.TEACHER, Role.ADMIN)
-@Get(':id/lessons')
-getLessons(
-  @Param('id') courseId: string,
-  @GetUser() user: any,
-) {
-  return this.coursesService.getLessons(courseId, user.tenantId, user.id);
-}
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Get(':id/lessons')
+  getLessons(
+    @Param('id') courseId: string,
+    @GetUser() user: any,
+  ) {
+    return this.coursesService.getLessons(courseId, user.tenantId, user.id);
+  }
 
-@UseGuards(RolesGuard)
-@Roles(Role.TEACHER, Role.ADMIN)
-@Patch(':id/lessons/:lessonId')
-updateLesson(
-  @Param('id') courseId: string,
-  @Param('lessonId') lessonId: string,
-  @GetUser() user: any,
-  @Body() body: {
-    title?: string;
-    videoUrl?: string;
-    duration?: number;
-    order?: number;
-    availableAt?: string;
-  },
-) {
-  return this.coursesService.updateLesson(lessonId, courseId, user.tenantId, user.id, body);
-}
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Patch(':id/lessons/:lessonId')
+  updateLesson(
+    @Param('id') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+    @Body() body: {
+      title?: string;
+      videoUrl?: string;
+      duration?: number;
+      order?: number;
+      availableAt?: string;
+    },
+  ) {
+    return this.coursesService.updateLesson(lessonId, courseId, user.tenantId, user.id, body);
+  }
 
-@UseGuards(RolesGuard)
-@Roles(Role.TEACHER, Role.ADMIN)
-@Delete(':id/lessons/:lessonId')
-deleteLesson(
-  @Param('id') courseId: string,
-  @Param('lessonId') lessonId: string,
-  @GetUser() user: any,
-) {
-  return this.coursesService.deleteLesson(lessonId, courseId, user.tenantId, user.id);
-}
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Delete(':id/lessons/:lessonId')
+  deleteLesson(
+    @Param('id') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+  ) {
+    return this.coursesService.deleteLesson(lessonId, courseId, user.tenantId, user.id);
+  }
 }
