@@ -5,12 +5,20 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { UsersRepository } from './users.repository';
+import { PrismaService } from '../../prisma/prisma.service';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(
+    private readonly usersRepository: UsersRepository,
+    // NEW: direct Prisma access for the teacher-approval flow below —
+    // these are simple tenant-scoped queries that don't need a dedicated
+    // repository method yet, same pattern already used elsewhere
+    // (e.g. CoursesService injects PrismaService alongside its repository).
+    private readonly prisma: PrismaService,
+  ) {}
 
   async findAll(tenantId: string, page: number, limit: number) {
     const { users, total } = await this.usersRepository.findAll(tenantId, page, limit);
@@ -88,5 +96,72 @@ export class UsersService {
 
     await this.usersRepository.delete(id);
     return { message: 'User deleted successfully' };
+  }
+
+  // ─── Teacher approval workflow (Admin Report Bug #2) ──────────────────
+
+  // the list behind the admin's "Pending Approvals" queue — teachers who
+  // self-registered and are blocked from logging in until reviewed
+  async getPendingTeachers(tenantId: string) {
+    return this.prisma.user.findMany({
+      where: { tenantId, role: Role.TEACHER, status: 'PENDING' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async approveTeacher(id: string, tenantId: string, approvedById: string) {
+    const teacher = await this.prisma.user.findFirst({
+      where: { id, tenantId, role: Role.TEACHER },
+    });
+    if (!teacher) throw new NotFoundException('Pending teacher not found');
+    if (teacher.status !== 'PENDING') {
+      throw new BadRequestException('This teacher is not awaiting approval');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        status: 'ACTIVE',
+        approvedAt: new Date(),
+        approvedBy: approvedById,
+      },
+    });
+
+    // in-app notification so the teacher actually finds out they can log
+    // in now — matches the PENDING notification created at registration
+    await this.prisma.notification.create({
+      data: {
+        tenantId,
+        userId: id,
+        title: 'Account approved',
+        message: 'Your teacher account has been approved. You can now log in.',
+        type: 'TEACHER_APPROVED',
+      },
+    });
+
+    return { id: updated.id, name: updated.name, status: updated.status };
+  }
+
+  async rejectTeacher(id: string, tenantId: string) {
+    const teacher = await this.prisma.user.findFirst({
+      where: { id, tenantId, role: Role.TEACHER },
+    });
+    if (!teacher) throw new NotFoundException('Pending teacher not found');
+    if (teacher.status !== 'PENDING') {
+      throw new BadRequestException('This teacher is not awaiting approval');
+    }
+
+    // a rejected registration never had real access to anything, so we
+    // remove the account outright rather than leaving a dead SUSPENDED
+    // row behind — nothing else in the system references it yet
+    await this.prisma.user.delete({ where: { id } });
+
+    return { message: 'Teacher registration rejected' };
   }
 }

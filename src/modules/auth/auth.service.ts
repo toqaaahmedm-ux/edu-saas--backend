@@ -2,6 +2,7 @@
   Injectable,
   UnauthorizedException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -66,11 +67,58 @@ export class AuthService {
     if (existing) throw new ConflictException('Email already exists');
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    // FIX (Admin Report Bug #1): role now actually gets saved — previously
+    // it was accepted by the DTO (after this same fix) but never passed to
+    // Prisma, so every registration silently became a STUDENT no matter
+    // what was requested.
+    //
+    // FIX (Admin Report Bug #2): a self-registered TEACHER starts PENDING
+    // and cannot log in until an admin approves them (see login() below and
+    // users.service.ts for the approval endpoint). STUDENT accounts need
+    // no approval and go straight to ACTIVE — the schema default already
+    // covers that, so we only need to special-case TEACHER here.
+    const role = dto.role ?? 'STUDENT';
+    const status = role === 'TEACHER' ? 'PENDING' : 'ACTIVE';
+
     const user = await this.prisma.user.create({
-      data: { tenantId, name: dto.name, email: dto.email, hashedPassword },
+      data: {
+        tenantId,
+        name: dto.name,
+        email: dto.email,
+        hashedPassword,
+        role,
+        status,
+      },
     });
 
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    // let the tenant's admins know a teacher is waiting on them, instead of
+    // this sitting invisibly in the database until someone happens to check
+    if (role === 'TEACHER') {
+      const admins = await this.prisma.user.findMany({
+        where: { tenantId, role: 'ADMIN' },
+        select: { id: true },
+      });
+      if (admins.length) {
+        await this.prisma.notification.createMany({
+          data: admins.map((admin) => ({
+            tenantId,
+            userId: admin.id,
+            title: 'New teacher registration',
+            message: `${user.name} registered as a teacher and is waiting for approval.`,
+            type: 'TEACHER_PENDING_APPROVAL',
+          })),
+        });
+      }
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+    };
   }
 
   async login(dto: LoginDto, tenantId: string) {
@@ -81,6 +129,19 @@ export class AuthService {
 
     const valid = await bcrypt.compare(dto.password, user.hashedPassword);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    // FIX (Admin Report Bug #2): this is the actual gate — without it, a
+    // PENDING teacher could already log in immediately after registering
+    // even though role/status were being saved correctly, because nothing
+    // ever checked status at login time.
+    if (user.status === 'PENDING') {
+      throw new ForbiddenException(
+        'Your account is pending admin approval. You will be notified once approved.',
+      );
+    }
+    if (user.status === 'SUSPENDED') {
+      throw new ForbiddenException('This account has been suspended. Please contact your admin.');
+    }
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },

@@ -11,6 +11,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Role } from '@prisma/client';
+import { AuditAction } from '../../common/interceptors/audit.interceptor';
 
 @Controller('billing')
 export class BillingController {
@@ -19,14 +20,18 @@ export class BillingController {
     private dunningService: DunningService,
   ) {}
 
-  // ── Public: قائمة الخطط ──────────────────────────────────────
+  // ── Public: plan list ──────────────────────────────────────
   @Public()
   @Get('plans')
   getAllPlans() {
     return this.billingService.getAllPlans();
   }
 
-  // ── SuperAdmin: إدارة الخطط ──────────────────────────────────
+  // ── SuperAdmin: plan management ──────────────────────────────
+  // Audit fix: these three mutate global pricing/plan data, which every
+  // tenant's billing depends on — they were previously silent, so a
+  // plan change had no paper trail at all.
+  @AuditAction('PLAN_CREATED')
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Post('plans')
@@ -34,6 +39,7 @@ export class BillingController {
     return this.billingService.createPlan(body);
   }
 
+  @AuditAction('PLAN_UPDATED')
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Patch('plans/:id')
@@ -41,6 +47,7 @@ export class BillingController {
     return this.billingService.updatePlan(id, body);
   }
 
+  @AuditAction('PLAN_ARCHIVED')
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Patch('plans/:id/archive')
@@ -48,7 +55,7 @@ export class BillingController {
     return this.billingService.archivePlan(id);
   }
 
-  // ── Tenant: معلومات الاشتراك ─────────────────────────────────
+  // ── Tenant: subscription info ─────────────────────────────────
   @UseGuards(SessionAuthGuard)
   @Get('my-plan')
   getMyPlan(@GetUser() user: any) {
@@ -61,7 +68,11 @@ export class BillingController {
     return this.billingService.getTenantInvoices(user.tenantId);
   }
 
-  // ── SuperAdmin: اشتراك tenant في خطة (يدوي بدون Stripe) ─────
+  // ── SuperAdmin: subscribe a tenant to a plan (manual, no Stripe) ─────
+  // Audit fix: this changes what a tenant is actually billed/entitled
+  // to, same sensitivity as PLAN_ASSIGNED on the admin controller —
+  // it just lived on a different controller and got missed.
+  @AuditAction('TENANT_SUBSCRIBED')
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Post('tenants/:tenantId/subscribe/:planId')

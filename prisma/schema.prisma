@@ -17,6 +17,16 @@ enum Role {
   STUDENT
 }
 
+// NEW (Admin Report — Bug #1/#2): lets us block login for teachers who
+// haven't been approved yet, or for anyone an admin has suspended.
+// Students default straight to ACTIVE — the approval gate is only meant
+// for TEACHER (and future STAFF-type) roles per the report's flow.
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
 enum CourseStatus {
   DRAFT
   PUBLISHED
@@ -136,6 +146,11 @@ model Plan {
   maxCourses   Int @default(10)
   maxStorageGb Int @default(5)
   maxLiveHours Int @default(0)
+  // NEW (Admin Report §4.1, P1/P2): course/enrollment limits already existed
+  // but quizzes and teacher headcount had no cap at all — a tenant on the
+  // cheapest plan could create unlimited quizzes or hire unlimited teachers.
+  maxQuizzes   Int @default(20)
+  maxTeachers  Int @default(5)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -219,6 +234,15 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // NEW (Admin Report Bug #1/#2, §4.1 P1/P2): the approval gate. Students
+  // default to ACTIVE (no approval needed); TEACHER accounts created via
+  // self-registration start PENDING and are blocked from login until an
+  // admin approves them. approvedAt/approvedBy give an audit trail of who
+  // approved which teacher and when — both null until that happens.
+  status      UserStatus @default(ACTIVE)
+  approvedAt  DateTime?
+  approvedBy  String?
+
   tenant             Tenant?             @relation("TenantUsers", fields: [tenantId], references: [id], onDelete: Cascade)
   ownedTenant        Tenant?             @relation("TenantOwner")
   verificationTokens VerificationToken[]
@@ -244,6 +268,7 @@ model User {
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([classSectionId])
+  @@index([status])
 }
 
 // ─── Academic calendar ────────────────────────────────────────────────────────

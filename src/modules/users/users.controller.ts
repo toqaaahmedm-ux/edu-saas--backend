@@ -14,6 +14,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
+import { AuditAction } from '../../common/interceptors/audit.interceptor';
 
 @Controller()
 export class UsersController {
@@ -65,6 +66,7 @@ export class UsersController {
     //  بنمرر (tenantId, id, requestUserId)
     return this.usersService.delete(user.tenantId, id, user.id);
   }
+   @AuditAction('USER_ROLE_UPDATED')
 @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch('admin/users/:id/role')
