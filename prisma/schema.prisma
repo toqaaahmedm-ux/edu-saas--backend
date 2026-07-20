@@ -95,7 +95,7 @@ model Tenant {
   trialEndsAt   DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
-
+mediaAssets     MediaAsset[]
   type           TenantType @default(TUTOR)
   gradeScale     String     @default("PERCENT_AF")
   academicConfig Json?
@@ -696,4 +696,29 @@ model VerificationToken {
 
   @@index([userId])
   @@index([token])
+}
+
+enum MediaAssetType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+// Storage usage tracking fix: uploads went to Cloudinary with no record
+// of file size or which tenant owns them, so per-tenant storage limits
+// (Plan.maxStorageGb) had no real data to enforce against — usage always
+// returned 0. This model gives every uploaded file a tenant-scoped row.
+model MediaAsset {
+  id        String         @id @default(uuid())
+  tenantId  String
+  uploaderId String
+  type      MediaAssetType
+  url       String
+  publicId  String
+  sizeBytes Int
+  createdAt DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }

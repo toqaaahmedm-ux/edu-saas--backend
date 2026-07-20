@@ -351,6 +351,34 @@ export class BillingService {
     };
   }
 
+  // SuperAdmin-facing: every subscription across every tenant, for the
+  // platform billing overview page. Distinct from getTenantInvoices,
+  // which is scoped to a single tenant.
+  async getAllSubscriptions() {
+    return this.prisma.subscription.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        tenant: { select: { id: true, name: true, subdomain: true, status: true } },
+        plan: { select: { id: true, name: true, price: true, currency: true } },
+      },
+    });
+  }
+
+  async getAllInvoices(limit: number = 50) {
+    return this.prisma.invoice.findMany({
+      orderBy: { issuedAt: 'desc' },
+      take: limit,
+      include: {
+        subscription: {
+          include: {
+            tenant: { select: { id: true, name: true, subdomain: true } },
+            plan: { select: { name: true } },
+          },
+        },
+      },
+    });
+  }
+  
   async getTenantInvoices(tenantId: string) {
     return this.prisma.invoice.findMany({
       where: { subscription: { tenantId } },

@@ -114,11 +114,26 @@ export class BillingController {
     return this.billingService.checkFeatureAccess(user.tenantId, featureKey);
   }
 
-  // ── BILL-03: Dunning manual trigger (SuperAdmin only) ─────────
+// ── BILL-03: Dunning manual trigger (SuperAdmin only) ─────────
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN)
   @Post('dunning/run')
   runDunning() {
     return this.dunningService.runManually();
+  }
+
+  // ── SuperAdmin: platform-wide billing overview ─────────────────
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  @Get('subscriptions')
+  getAllSubscriptions() {
+    return this.billingService.getAllSubscriptions();
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  @Get('invoices/all')
+  getAllInvoices() {
+    return this.billingService.getAllInvoices();
   }
 }

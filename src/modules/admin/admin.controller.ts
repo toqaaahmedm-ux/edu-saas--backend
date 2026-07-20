@@ -66,6 +66,15 @@ export class AdminController {
     return this.adminService.suspendTenant(id, user.id);
   }
 
+  @Patch('tenants/:id/extend-trial')
+  extendTrial(
+    @Param('id') id: string,
+    @Body() body: { days: number },
+    @GetUser() user: any,
+  ) {
+    return this.adminService.extendTrial(id, body.days, user.id);
+  }
+  
   @AuditAction('PLAN_ASSIGNED')
   @Patch('tenants/:id/plan')
   assignPlan(

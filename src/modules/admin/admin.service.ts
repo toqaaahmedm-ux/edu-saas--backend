@@ -9,11 +9,11 @@ const TRIAL_DAYS = 14;
 
 @Injectable()
 export class AdminService {
- constructor(
+  constructor(
     private readonly prisma: PrismaService,
     private readonly billingService: BillingService,
     private readonly mailService: MailService,
-  ) {}
+  ) { }
 
   // ─── Tenant CRUD ─────────────────────────────────────
 
@@ -39,6 +39,9 @@ export class AdminService {
       where: { id },
       include: {
         plan: true,
+        // Needed for the Tenant Detail page — without this, the UI has
+        // no way to show who the tenant's admin actually is.
+        owner: { select: { id: true, name: true, email: true, createdAt: true } },
         subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
         _count: { select: { users: true, courses: true, enrollments: true } },
       },
@@ -98,14 +101,14 @@ export class AdminService {
       });
     });
 
-   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     this.mailService
       .sendTenantWelcome(tenant.owner!.email, {
         tenantName: tenant.name,
         ownerName: tenant.owner!.name,
         loginUrl: `${frontendUrl}/login`,
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return tenant;
   }
@@ -124,7 +127,7 @@ export class AdminService {
     });
   }
 
- // Sprint 1 fix: removed the manual auditLog.create call here — @AuditAction
+  // Sprint 1 fix: removed the manual auditLog.create call here — @AuditAction
   // on the controller (admin.controller.ts) already logs this via the
   // interceptor. Keeping both was writing two audit rows per suspend action.
   async suspendTenant(id: string, actorId: string) {
@@ -135,6 +138,31 @@ export class AdminService {
     });
   }
 
+  // Sprint 2 — SuperAdmin: manual trial extension.
+  async extendTrial(id: string, days: number, actorId: string) {
+    const tenant = await this.findTenantById(id);
+    const currentEnd = tenant.trialEndsAt ? new Date(tenant.trialEndsAt) : new Date();
+    const newEnd = new Date(currentEnd);
+    newEnd.setDate(newEnd.getDate() + days);
+
+    const updated = await this.prisma.tenant.update({
+      where: { id },
+      data: { trialEndsAt: newEnd },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'TRIAL_EXTENDED',
+        target: id,
+        tenantId: id,
+        metadata: { days, newTrialEndsAt: newEnd },
+      },
+    });
+
+    return updated;
+  }
+  
   // SA-C02 fix: بدل ما يحدّث tenant.planId لوحده، بقى بيستخدم BillingService
   // كمصدر قانوني واحد بيحدّث tenant.planId و Subscription مع بعض في transaction واحدة
   async assignPlan(tenantId: string, planId: string, actorId: string) {
