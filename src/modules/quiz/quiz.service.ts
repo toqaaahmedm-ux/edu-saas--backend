@@ -8,6 +8,7 @@ import { QuizRepository } from './quiz.repository';
 import { CertificatesService } from '../certificates/certificates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 
 const MAX_ATTEMPTS = 3;
 
@@ -18,9 +19,10 @@ export class QuizService {
     private readonly certificatesService: CertificatesService,
     private readonly notificationsService: NotificationsService,
     private readonly prisma: PrismaService,
+    private readonly billingService: BillingService, // Bug #4 FIX: needed for maxQuizzes enforcement
   ) { }
 
-  // ─── Student Methods ────────────────────────────────────────────────────────
+  // ─── Student Methods ────────────────────────────────────────────────────
 
   // Students only see quizzes from courses they're enrolled in.
   // If a courseId filter is passed, we still verify it's one of their
@@ -185,7 +187,7 @@ export class QuizService {
     };
   }
 
-  // ─── Teacher Methods ─────────────────────────────────────────────────────────
+  // ─── Teacher Methods ────────────────────────────────────────────────────
 
   async createQuizWithQuestions(
     tenantId: string,
@@ -220,9 +222,29 @@ export class QuizService {
       throw new BadRequestException('Quiz must have at least one question');
     }
 
+    // Bug #4 FIX (Admin Report §4.1/§2): maxQuizzes existed as a schema
+    // field but nothing ever checked it — a tenant on any plan, including
+    // the cheapest one, could create unlimited quizzes. This mirrors the
+    // exact pattern already used for maxCourses in courses.service.ts:
+    // look up the active subscription, and if the tenant has one, count
+    // existing quizzes and reject before creating a new one over the limit.
+    const subscription = await this.billingService.getTenantSubscription(tenantId);
+
     // wrap quiz + questions in a transaction so we never end up with a
     // quiz row that has no questions if createMany fails halfway through
     const quiz = await this.prisma.$transaction(async (tx) => {
+      if (subscription) {
+        const maxQuizzes = subscription.plan.maxQuizzes;
+        const currentQuizzes = await tx.quiz.count({
+          where: { tenantId },
+        });
+        if (currentQuizzes >= maxQuizzes) {
+          throw new BadRequestException(
+            `Quiz limit reached (${maxQuizzes}). Please upgrade your plan.`,
+          );
+        }
+      }
+
       const newQuiz = await tx.quiz.create({
         data: {
           tenantId,

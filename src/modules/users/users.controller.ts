@@ -16,14 +16,27 @@ import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 
-@Controller()
+// Bug #6 FIX (Admin Report): this controller used to sit at the API root
+// (@Controller() with no prefix), producing routes like GET /api/me and
+// GET /api/admin/users that implicitly clashed with AdminController's
+// /api/admin/* namespace. Now scoped under /api/users/*, and the admin
+// sub-routes drop the redundant "users" segment (GET /api/admin/users ->
+// GET /api/users/admin) since it's already implied by the prefix.
+@Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(SessionAuthGuard)
   @Get('me')
-  getMe(@GetUser('id') id: string) {
-    return this.usersService.findById(id);
+  async getMe(@GetUser() tokenUser: any) {
+    const dbUser = await this.usersService.findById(tokenUser.id);
+    // impersonatedBy only exists on the JWT payload (set by
+    // /auth/impersonate), never in the User table itself — so we merge
+    // it in here rather than trying to persist it anywhere.
+    return {
+      ...dbUser,
+      impersonatedBy: tokenUser.impersonatedBy ?? null,
+    };
   }
 
   @UseGuards(SessionAuthGuard)
@@ -46,7 +59,7 @@ export class UsersController {
 
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  @Get('admin/users')
+  @Get('admin')
   findAll(
     @GetUser() user: any,
     @Query('page') page = '1',
@@ -58,7 +71,7 @@ export class UsersController {
 
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  @Delete('admin/users/:id')
+  @Delete('admin/:id')
   delete(
     @Param('id') id: string,
     @GetUser() user: any,
@@ -66,10 +79,11 @@ export class UsersController {
     //  بنمرر (tenantId, id, requestUserId)
     return this.usersService.delete(user.tenantId, id, user.id);
   }
-   @AuditAction('USER_ROLE_UPDATED')
-@UseGuards(SessionAuthGuard, RolesGuard)
+
+  @AuditAction('USER_ROLE_UPDATED')
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  @Patch('admin/users/:id/role')
+  @Patch('admin/:id/role')
   updateRole(
     @Param('id') id: string,
     @GetUser() user: any,

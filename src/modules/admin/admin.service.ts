@@ -162,7 +162,7 @@ export class AdminService {
 
     return updated;
   }
-  
+
   // SA-C02 fix: بدل ما يحدّث tenant.planId لوحده، بقى بيستخدم BillingService
   // كمصدر قانوني واحد بيحدّث tenant.planId و Subscription مع بعض في transaction واحدة
   async assignPlan(tenantId: string, planId: string, actorId: string) {
@@ -223,7 +223,88 @@ export class AdminService {
 
     return { totalTenants, activeTenants, totalUsers, totalCourses, totalEnrollments };
   }
+// Platform revenue analytics for the SuperAdmin dashboard.
+  // MRR normalizes every billing cycle down to a monthly figure so plans
+  // on different cycles (monthly/quarterly/annual) can be summed
+  // meaningfully — an annual plan's real monthly contribution is
+  // price/12, not its sticker price.
+  async getPlatformAnalytics() {
+    const activeSubscriptions = await this.prisma.subscription.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        plan: { select: { id: true, name: true, price: true, billingCycle: true } },
+        tenant: { select: { id: true, name: true } },
+      },
+    });
 
+    const monthlyValue = (price: number, cycle: string) => {
+      if (cycle === 'ANNUAL') return price / 12;
+      if (cycle === 'QUARTERLY') return price / 3;
+      return price; // MONTHLY
+    };
+
+    let mrr = 0;
+    const revenueByPlan: Record<string, { planName: string; tenantCount: number; mrr: number }> = {};
+
+    for (const sub of activeSubscriptions) {
+      const monthly = monthlyValue(Number(sub.plan.price), sub.plan.billingCycle);
+      mrr += monthly;
+
+      const key = sub.plan.id;
+      if (!revenueByPlan[key]) {
+        revenueByPlan[key] = { planName: sub.plan.name, tenantCount: 0, mrr: 0 };
+      }
+      revenueByPlan[key].tenantCount += 1;
+      revenueByPlan[key].mrr += monthly;
+    }
+
+    // Tenant growth over the last 6 months, bucketed by creation month.
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+
+    const recentTenants = await this.prisma.tenant.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true },
+    });
+
+    const growthMap: Record<string, number> = {};
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(sixMonthsAgo);
+      d.setMonth(d.getMonth() + i);
+      const key = d.toLocaleString('en', { month: 'short', year: '2-digit' });
+      growthMap[key] = 0;
+    }
+    recentTenants.forEach((t) => {
+      const key = t.createdAt.toLocaleString('en', { month: 'short', year: '2-digit' });
+      if (growthMap[key] !== undefined) growthMap[key] += 1;
+    });
+
+    // Trial conversion: of tenants that ever had a trial (trialEndsAt is
+    // set), what fraction are now ACTIVE vs still TRIAL/other. This is a
+    // simple snapshot ratio, not a true cohort analysis — we don't keep
+    // status-change history, so we can't tell exactly when a trial
+    // converted, only whether it currently has (status=ACTIVE) or hasn't.
+    const [everTrialed, convertedFromTrial] = await Promise.all([
+      this.prisma.tenant.count({ where: { trialEndsAt: { not: null } } }),
+      this.prisma.tenant.count({ where: { trialEndsAt: { not: null }, status: 'ACTIVE' } }),
+    ]);
+
+    const trialConversionRate = everTrialed > 0
+      ? Math.round((convertedFromTrial / everTrialed) * 100)
+      : 0;
+
+    return {
+      mrr: Math.round(mrr * 100) / 100,
+      arr: Math.round(mrr * 12 * 100) / 100,
+      revenueByPlan: Object.values(revenueByPlan),
+      tenantGrowth: Object.entries(growthMap).map(([month, count]) => ({ month, count })),
+      trialConversionRate,
+      everTrialed,
+      convertedFromTrial,
+    };
+  }
+  
   // ─── Audit Logs ───────────────────────────────────────
 
   async getAuditLogs(tenantId?: string, page = 1, limit = 20) {

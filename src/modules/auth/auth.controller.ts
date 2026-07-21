@@ -1,7 +1,11 @@
 ﻿import {
-  Controller, Post, Get, Body,
-  Req, Res, UnauthorizedException, Headers,
+  Controller, Post, Get, Body, Param,
+  Req, Res, UnauthorizedException, Headers, UseGuards,
 } from '@nestjs/common';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { GetUser } from '../../common/decorators/get-user.decorator';
+import { Role } from '@prisma/client';
 import { ApiHeader, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -92,10 +96,25 @@ export class AuthController {
     res.clearCookie('refresh-token', { path: '/auth/refresh' });
     return res.json({ success: true });
   }
+// Returns the token directly instead of setting a cookie — the caller
+  // (SuperAdmin, on localhost:3000) and the target (tenant subdomain)
+  // are different origins, so a cookie set here would land on the wrong
+  // domain. The frontend carries this token to the tenant's own
+  // subdomain and converts it to a cookie there instead.
+  @UseGuards(RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  @Post('impersonate/:userId')
+  @AuditAction('TENANT_IMPERSONATED')
+  async impersonate(
+    @Param('userId') userId: string,
+    @GetUser('id') superAdminId: string,
+  ) {
+    const result = await this.authService.impersonateTenantAdmin(userId, superAdminId);
+    return { success: true, accessToken: result.accessToken, data: result.data };
+  }
 
   // BE-L04: GET /auth/me متشالة من هنا — المسار الأغنى (بيرجع من DB)
   // موجود في UsersController على GET /me
-
   @Public()
   @Post('superadmin/login')
   @AuditAction('SUPERADMIN_LOGIN')
@@ -106,7 +125,6 @@ export class AuthController {
     res.cookie('session-token', result.accessToken, ACCESS_COOKIE_OPTIONS);
     res.cookie('refresh-token', result.refreshToken, REFRESH_COOKIE_OPTIONS);
 
-    // BE-H04 FIX: نفس الإصلاح هنا
     return res.json({
       success: true,
       data: result.data,

@@ -19,6 +19,7 @@ export interface JwtPayload {
   role: string;
   tenantId: string | null;
   name: string;
+  impersonatedBy?: string;
 }
 
 @Injectable()
@@ -222,6 +223,48 @@ export class AuthService {
     return this.signToken(this.buildPayload(user));
   }
 
+  // SuperAdmin impersonation: issues a short-lived token that lets the
+  // caller act as a specific tenant admin for support/debugging purposes.
+  // Deliberately separate from the normal login flow — this never checks
+  // a password, only that the caller is already an authenticated
+  // SUPER_ADMIN (enforced by the guard on the controller endpoint).
+  //
+  // The token embeds impersonatedBy so downstream code (and the audit
+  // log entry created by the controller's @AuditAction) can always tell
+  // this wasn't a real login by that user.
+  async impersonateTenantAdmin(targetUserId: string, superAdminId: string) {
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, role: true, tenantId: true, name: true },
+    });
+
+    if (!targetUser) throw new UnauthorizedException('Target user not found');
+    if (targetUser.role === 'SUPER_ADMIN') {
+      throw new UnauthorizedException('Cannot impersonate another SUPER_ADMIN');
+    }
+
+    const payload = {
+      ...this.buildPayload(targetUser),
+      impersonatedBy: superAdminId,
+    };
+
+    // Short-lived on purpose (30 min) — this is a support tool, not a
+    // regular session, so it shouldn't linger if someone forgets to exit.
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '30m' });
+
+    return {
+      accessToken,
+      data: {
+        id: targetUser.id,
+        tenantId: targetUser.tenantId,
+        name: targetUser.name,
+        email: targetUser.email,
+        role: targetUser.role,
+        impersonatedBy: superAdminId,
+      },
+    };
+  }
+  
   async getMe(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

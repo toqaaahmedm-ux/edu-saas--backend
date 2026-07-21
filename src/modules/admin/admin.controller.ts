@@ -28,6 +28,11 @@ export class AdminController {
     return this.adminService.getPlatformStats();
   }
 
+  @Get('analytics')
+  getPlatformAnalytics() {
+    return this.adminService.getPlatformAnalytics();
+  }
+
   @Get('tenants')
   findAllTenants(
     @Query('page') page = '1',
@@ -74,7 +79,7 @@ export class AdminController {
   ) {
     return this.adminService.extendTrial(id, body.days, user.id);
   }
-  
+
   @AuditAction('PLAN_ASSIGNED')
   @Patch('tenants/:id/plan')
   assignPlan(
