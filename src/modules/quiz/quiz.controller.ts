@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -19,8 +19,6 @@ import { Role } from '@prisma/client';
 @Controller('quiz')
 export class QuizController {
   constructor(private readonly quizService: QuizService) {}
-
-  // ─── Teacher Endpoints أولاً (لازم تيجي قبل :id routes) ──────────────────
 
   @Post('teacher/create')
   @UseGuards(RolesGuard)
@@ -63,13 +61,21 @@ export class QuizController {
     return this.quizService.deleteQuiz(id, user.tenantId, user.id);
   }
 
-  // ─── Student Endpoints (بعد الـ teacher routes) ───────────────────────────
-
-  // S-SEC02 fix: optional ?courseId= query param, enforced against the
-  // student's own enrollments inside the service.
   @Get()
   getAllQuizzes(@GetUser() user: any, @Query('courseId') courseId?: string) {
     return this.quizService.getAllQuizzes(user.tenantId, user.id, courseId);
+  }
+
+  // Task #7
+  @Get(':id/my-attempts')
+  getMyAttempts(@Param('id') quizId: string, @GetUser() user: any) {
+    return this.quizService.getMyAttempts(user.tenantId, user.id, quizId);
+  }
+
+  // Task #7
+  @Get(':id/my-latest-attempt')
+  getMyLatestAttempt(@Param('id') quizId: string, @GetUser() user: any) {
+    return this.quizService.getMyLatestAttempt(user.tenantId, user.id, quizId);
   }
 
   @Get(':id')

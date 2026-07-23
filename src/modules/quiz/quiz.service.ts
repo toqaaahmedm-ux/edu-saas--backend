@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -12,6 +12,15 @@ import { BillingService } from '../billing/billing.service';
 
 const MAX_ATTEMPTS = 3;
 
+export interface AnswerSnapshot {
+  questionId: string;
+  questionText: string;
+  options: string[];
+  correctIndex: number;
+  selectedAnswer: number | null;
+  isCorrect: boolean;
+}
+
 @Injectable()
 export class QuizService {
   constructor(
@@ -19,14 +28,9 @@ export class QuizService {
     private readonly certificatesService: CertificatesService,
     private readonly notificationsService: NotificationsService,
     private readonly prisma: PrismaService,
-    private readonly billingService: BillingService, // Bug #4 FIX: needed for maxQuizzes enforcement
+    private readonly billingService: BillingService,
   ) { }
 
-  // ─── Student Methods ────────────────────────────────────────────────────
-
-  // Students only see quizzes from courses they're enrolled in.
-  // If a courseId filter is passed, we still verify it's one of their
-  // enrolled courses before returning anything — no peeking at other courses.
   async getAllQuizzes(tenantId: string, studentId: string, courseId?: string) {
     const enrollments = await this.prisma.enrollment.findMany({
       where: { studentId },
@@ -41,9 +45,6 @@ export class QuizService {
     return this.quizRepository.findAllWithCourse(tenantId, enrolledCourseIds, courseId);
   }
 
-  // Quiz lookup is scoped to tenantId so a student from tenant A can never
-  // pull a quiz from tenant B, even if they somehow know the ID.
-  // We also check enrollment before returning any question data.
   async getQuizWithQuestions(quizId: string, tenantId: string, studentId: string) {
     const quiz = await this.quizRepository.findByIdWithQuestions(quizId, tenantId);
     if (!quiz) throw new NotFoundException('Quiz not found');
@@ -78,7 +79,6 @@ export class QuizService {
       );
     }
 
-    // clean up any abandoned attempt before starting a fresh one
     await this.quizRepository.deleteIncompleteAttempt(studentId, quizId);
     const attempt = await this.quizRepository.createAttempt(tenantId, studentId, quizId);
 
@@ -97,7 +97,7 @@ export class QuizService {
     answers: { questionId: string; answer: number }[],
   ) {
     if (!answers || answers.length === 0) {
-      throw new BadRequestException('No answers submitted — request rejected');
+      throw new BadRequestException('No answers submitted - request rejected');
     }
 
     const quiz = await this.quizRepository.findById(quizId, tenantId);
@@ -114,11 +114,10 @@ export class QuizService {
     if (!attempt) throw new BadRequestException('You must start the quiz first');
     if (attempt.submittedAt) throw new BadRequestException('Quiz already submitted');
 
-    // give a 5-second grace period for network lag before rejecting a late submission
     if (quiz.timeLimit) {
       const elapsed = (Date.now() - attempt.startedAt.getTime()) / 1000;
       if (elapsed > quiz.timeLimit + 5) {
-        await this.quizRepository.updateAttemptScore(attempt.id, 0);
+        await this.quizRepository.updateAttemptResult(attempt.id, 0, []);
         throw new BadRequestException('Quiz time limit exceeded');
       }
     }
@@ -126,15 +125,25 @@ export class QuizService {
     const questions = await this.quizRepository.findQuestionsByQuizId(quizId);
 
     let correct = 0;
+    const answerSnapshots: AnswerSnapshot[] = [];
     for (const question of questions) {
       const submitted = answers.find((a) => a.questionId === question.id);
-      if (submitted && Number(submitted.answer) === question.correctIndex) {
-        correct++;
-      }
+      const selectedAnswer = submitted ? Number(submitted.answer) : null;
+      const isCorrect = selectedAnswer !== null && selectedAnswer === question.correctIndex;
+      if (isCorrect) correct++;
+
+      answerSnapshots.push({
+        questionId: question.id,
+        questionText: question.text,
+        options: question.options,
+        correctIndex: question.correctIndex,
+        selectedAnswer,
+        isCorrect,
+      });
     }
 
     const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
-    await this.quizRepository.updateAttemptScore(attempt.id, score);
+    await this.quizRepository.updateAttemptResult(attempt.id, score, answerSnapshots);
 
     const allAttempts = await this.quizRepository.findAllCompletedAttempts(studentId, quizId);
     const bestScore = Math.max(...allAttempts.map((a) => a.score));
@@ -144,15 +153,13 @@ export class QuizService {
     await this.notificationsService.createNotification({
       userId: studentId,
       tenantId,
-      title: score >= 70 ? 'أحسنت! اجتزت الاختبار 🎉' : 'نتيجة الاختبار',
-      message: `حصلت على ${score}% في الاختبار`,
+      title: score >= 70 ? 'Passed the quiz' : 'Quiz result',
+      message: `You scored ${score}% on the quiz`,
       type: 'QUIZ_COMPLETED',
     });
 
     let certificate = null;
     if (quiz.courseId && score >= 70) {
-      // mark the enrollment complete before trying to issue a certificate,
-      // otherwise the certificate service might see an incomplete enrollment
       await this.prisma.enrollment.update({
         where: {
           studentId_courseId: { studentId, courseId: quiz.courseId },
@@ -168,8 +175,8 @@ export class QuizService {
         await this.notificationsService.createNotification({
           userId: studentId,
           tenantId,
-          title: 'تهانينا! حصلت على شهادة 🏆',
-          message: 'تم إصدار شهادتك بنجاح',
+          title: 'Certificate issued',
+          message: 'Your certificate has been issued successfully',
           type: 'CERTIFICATE',
         });
       }
@@ -187,7 +194,72 @@ export class QuizService {
     };
   }
 
-  // ─── Teacher Methods ────────────────────────────────────────────────────
+  async getMyAttempts(tenantId: string, studentId: string, quizId: string) {
+    const quiz = await this.quizRepository.findById(quizId, tenantId);
+    if (!quiz) throw new NotFoundException('Quiz not found');
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in the course to view this quiz');
+    }
+
+    const attempts = await this.quizRepository.findAllCompletedAttempts(studentId, quizId);
+    return attempts.map((a) => ({
+      attemptId: a.id,
+      score: a.score,
+      passed: a.score >= 70,
+      startedAt: a.startedAt,
+      submittedAt: a.submittedAt,
+    }));
+  }
+
+  async getMyLatestAttempt(tenantId: string, studentId: string, quizId: string) {
+    const quiz = await this.quizRepository.findById(quizId, tenantId);
+    if (!quiz) throw new NotFoundException('Quiz not found');
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in the course to view this quiz');
+    }
+
+    const attempt = await this.quizRepository.findLatestCompletedAttempt(studentId, quizId);
+    if (!attempt) throw new NotFoundException('No completed attempt found for this quiz');
+
+    const allAttempts = await this.quizRepository.findAllCompletedAttempts(studentId, quizId);
+    const bestScore = Math.max(...allAttempts.map((a) => a.score));
+    const attemptsUsed = allAttempts.length;
+    const attemptsRemaining = Math.max(0, MAX_ATTEMPTS - attemptsUsed);
+
+    let certificate = null;
+    if (quiz.courseId) {
+      certificate = await this.prisma.certificate.findUnique({
+        where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
+      });
+    }
+
+    const answers = ((attempt.answers as unknown) as AnswerSnapshot[]) ?? [];
+    const correct = answers.filter((a) => a.isCorrect).length;
+
+    return {
+      attemptId: attempt.id,
+      courseId: quiz.courseId,
+      score: attempt.score,
+      correct,
+      total: answers.length,
+      passed: attempt.score >= 70,
+      bestScore,
+      attemptsUsed,
+      attemptsRemaining,
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt,
+      certificate: certificate ?? null,
+      answers,
+    };
+  }
 
   async createQuizWithQuestions(
     tenantId: string,
@@ -204,7 +276,6 @@ export class QuizService {
       }[];
     },
   ) {
-    // make sure the course exists in this tenant and belongs to this teacher
     const course = await this.prisma.course.findUnique({
       where: { id: data.courseId },
       select: { tenantId: true, instructorId: true },
@@ -222,16 +293,8 @@ export class QuizService {
       throw new BadRequestException('Quiz must have at least one question');
     }
 
-    // Bug #4 FIX (Admin Report §4.1/§2): maxQuizzes existed as a schema
-    // field but nothing ever checked it — a tenant on any plan, including
-    // the cheapest one, could create unlimited quizzes. This mirrors the
-    // exact pattern already used for maxCourses in courses.service.ts:
-    // look up the active subscription, and if the tenant has one, count
-    // existing quizzes and reject before creating a new one over the limit.
     const subscription = await this.billingService.getTenantSubscription(tenantId);
 
-    // wrap quiz + questions in a transaction so we never end up with a
-    // quiz row that has no questions if createMany fails halfway through
     const quiz = await this.prisma.$transaction(async (tx) => {
       if (subscription) {
         const maxQuizzes = subscription.plan.maxQuizzes;
@@ -251,7 +314,7 @@ export class QuizService {
           title: data.title,
           courseId: data.courseId,
           timeLimit: data.timeLimit ?? 600,
-          passScore: data.passScore ?? 70, // was missing before — frontend value was silently dropped
+          passScore: data.passScore ?? 70,
         },
       });
 

@@ -28,7 +28,6 @@ export class MailService {
 
   private async enqueue(job: MailJob) {
     const from = this.config.get<string>('MAIL_FROM') || 'EduSaaS <onboarding@resend.dev>';
-
     const { error } = await this.resend.emails.send({
       from,
       to: job.to,
@@ -38,7 +37,6 @@ export class MailService {
 
     if (error) {
       this.logger.warn(`Email attempt ${job.attempt} failed for ${job.to}: ${error.message}`);
-
       if (job.attempt < MAX_ATTEMPTS) {
         const delay = BACKOFF_MS[job.attempt - 1] ?? 20000;
         setTimeout(() => this.enqueue({ ...job, attempt: job.attempt + 1 }), delay);
@@ -58,6 +56,27 @@ export class MailService {
 
   async sendPasswordReset(to: string, params: { name: string; resetUrl: string }) {
     const { subject, html } = passwordResetEmailTemplate(params);
+    this.enqueue({ to, subject, html, attempt: 1 });
+  }
+
+  // NEW (REQ-02): sent when an admin creates a teacher/student account
+  // directly and requests an invite email. Kept as inline HTML here
+  // rather than a shared template file, to match this method's narrower
+  // one-off purpose (temporary password + login link only).
+  async sendUserInvite(
+    to: string,
+    params: { name: string; loginUrl: string; temporaryPassword: string },
+  ) {
+    const subject = 'You have been invited to EduSaaS';
+    const html = `
+      <div style="font-family: sans-serif; line-height: 1.6;">
+        <h2>Hi ${params.name},</h2>
+        <p>An admin has created an account for you on EduSaaS.</p>
+        <p><strong>Temporary password:</strong> ${params.temporaryPassword}</p>
+        <p>Please log in and change your password as soon as possible.</p>
+        <p><a href="${params.loginUrl}">Log in here</a></p>
+      </div>
+    `;
     this.enqueue({ to, subject, html, attempt: 1 });
   }
 }

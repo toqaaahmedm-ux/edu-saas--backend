@@ -1,6 +1,7 @@
-import {
+﻿import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Param,
@@ -15,13 +16,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
+import { CreateUserDto } from './dto/create-user.dto';
 
-// Bug #6 FIX (Admin Report): this controller used to sit at the API root
-// (@Controller() with no prefix), producing routes like GET /api/me and
-// GET /api/admin/users that implicitly clashed with AdminController's
-// /api/admin/* namespace. Now scoped under /api/users/*, and the admin
-// sub-routes drop the redundant "users" segment (GET /api/admin/users ->
-// GET /api/users/admin) since it's already implied by the prefix.
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -30,9 +26,6 @@ export class UsersController {
   @Get('me')
   async getMe(@GetUser() tokenUser: any) {
     const dbUser = await this.usersService.findById(tokenUser.id);
-    // impersonatedBy only exists on the JWT payload (set by
-    // /auth/impersonate), never in the User table itself — so we merge
-    // it in here rather than trying to persist it anywhere.
     return {
       ...dbUser,
       impersonatedBy: tokenUser.impersonatedBy ?? null,
@@ -65,7 +58,6 @@ export class UsersController {
     @Query('page') page = '1',
     @Query('limit') limit = '10',
   ) {
-    // بنمرر (tenantId, page, limit)
     return this.usersService.findAll(user.tenantId, +page, +limit);
   }
 
@@ -76,7 +68,6 @@ export class UsersController {
     @Param('id') id: string,
     @GetUser() user: any,
   ) {
-    //  بنمرر (tenantId, id, requestUserId)
     return this.usersService.delete(user.tenantId, id, user.id);
   }
 
@@ -89,7 +80,44 @@ export class UsersController {
     @GetUser() user: any,
     @Body() body: { role: Role },
   ) {
-    // passing tenantId now so the service can enforce same-tenant scope
     return this.usersService.updateRole(id, user.tenantId, body.role, user.id);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('admin/pending')
+  getPendingTeachers(@GetUser() user: any) {
+    return this.usersService.getPendingTeachers(user.tenantId);
+  }
+
+  @AuditAction('TEACHER_APPROVED')
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Patch('admin/:id/approve')
+  approveTeacher(
+    @Param('id') id: string,
+    @GetUser() user: any,
+  ) {
+    return this.usersService.approveTeacher(id, user.tenantId, user.id);
+  }
+
+  @AuditAction('TEACHER_REJECTED')
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Patch('admin/:id/reject')
+  rejectTeacher(
+    @Param('id') id: string,
+    @GetUser() user: any,
+  ) {
+    return this.usersService.rejectTeacher(id, user.tenantId);
+  }
+
+
+  @AuditAction('USER_CREATED')
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('admin')
+  createUser(@GetUser() user: any, @Body() dto: CreateUserDto) {
+    return this.usersService.createUser(user.tenantId, dto);
   }
 }

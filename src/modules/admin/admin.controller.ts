@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -14,8 +14,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
-import { CreateTenantDto } from './dto/create-tenant.dto'; // ✅ BE-H03
-import { UpdateTenantDto } from './dto/update-tenant.dto'; // ✅ BE-H03
+import { CreateTenantDto } from './dto/create-tenant.dto';
+import { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @Controller('admin')
 @UseGuards(RolesGuard)
@@ -31,6 +31,30 @@ export class AdminController {
   @Get('analytics')
   getPlatformAnalytics() {
     return this.adminService.getPlatformAnalytics();
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('analytics/tenant')
+  getTenantAnalytics(@GetUser() user: any) {
+    return this.adminService.getTenantAnalytics(user.tenantId);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('tenant-analytics')
+  getTenantAnalyticsAlias(@GetUser() user: any) {
+    return this.adminService.getTenantAnalytics(user.tenantId);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('analytics/academic')
+  getAcademicOverview(@GetUser() user: any) {
+    return this.adminService.getAcademicOverview(user.tenantId);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('usage/me')
+  getMyUsage(@GetUser() user: any) {
+    return this.adminService.getTenantUsage(user.tenantId);
   }
 
   @Get('tenants')
@@ -52,7 +76,6 @@ export class AdminController {
     return this.adminService.createTenant(dto);
   }
 
-  
   @AuditAction('TENANT_UPDATED')
   @Patch('tenants/:id')
   updateTenant(

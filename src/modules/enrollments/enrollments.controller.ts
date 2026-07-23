@@ -1,8 +1,9 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -23,14 +24,32 @@ export class EnrollmentsController {
     return this.enrollmentsService.enroll(user.tenantId, user.id, body.courseId);
   }
 
+  // NEW (REQ-03): admin assigns a student to a course directly, bypassing
+  // the payment gate. Separate route from the self-enroll one above so
+  // permissions and behavior stay clearly split.
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Post('admin')
+  adminEnroll(
+    @GetUser() user: any,
+    @Body() body: { studentId: string; courseId: string },
+  ) {
+    return this.enrollmentsService.adminEnroll(user.tenantId, body.studentId, body.courseId);
+  }
+
+  // NEW (REQ-03): admin removes a student from a course.
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @Delete('admin/:id')
+  removeEnrollment(@Param('id') id: string, @GetUser() user: any) {
+    return this.enrollmentsService.removeEnrollment(user.tenantId, id);
+  }
+
   @Get('my')
   getMyEnrollments(@GetUser() user: any) {
     return this.enrollmentsService.getMyEnrollments(user.tenantId, user.id);
   }
 
-  // HIGH-16 FIX: قبل كده أي مستخدم مسجل دخول (حتى الطلاب) كان يقدر يشوف
-  // قائمة كل الطلاب المسجلين في أي كورس — ده data leak حقيقي. دلوقتي
-  // الـ endpoint ده محمي بـ RolesGuard ومتاح للـ TEACHER والـ ADMIN بس.
   @UseGuards(RolesGuard)
   @Roles('TEACHER', 'ADMIN')
   @Get('course/:courseId')
@@ -38,10 +57,6 @@ export class EnrollmentsController {
     return this.enrollmentsService.getEnrollmentsByCourse(user.tenantId, courseId);
   }
 
-  // CRIT-10 FIX: الـ endpoint ده كان ناقص بالكامل — الـ service عنده
-  // updateProgress() جاهزة، لكن مفيش route بيوصلها. من غيره الفرونت
-  // مينفعش يحفظ تقدم الطالب في الداتابيز خالص مهما كان الكود في الفرونت
-  // مظبوط.
   @Patch(':id/progress')
   updateProgress(
     @Param('id') id: string,
