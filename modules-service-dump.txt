@@ -6,16 +6,16 @@
 } from '@nestjs/common';
 import { ModulesRepository } from './modules.repository';
 import { CoursesService } from '../courses/courses.service';
-import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class ModulesService {
   constructor(
     private readonly modulesRepository: ModulesRepository,
     private readonly coursesService: CoursesService,
-    private readonly prisma: PrismaService,
   ) {}
 
+  // Ø¨ÙŠØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„ÙƒÙˆØ±Ø³ Ù…ÙˆØ¬ÙˆØ¯ØŒ ØªØ§Ø¨Ø¹ Ù„Ù†ÙØ³ Ø§Ù„Ù€ tenantØŒ ÙˆØ¥Ù† Ø§Ù„Ù…Ø¯Ø±Ù‘Ø³ Ù‡Ùˆ Ø§Ù„Ù…Ø§Ù„Ùƒ
+  // (Ø£Ùˆ Admin) â€” Ù†ÙØ³ ÙØ­Øµ Ø§Ù„Ù…Ù„ÙƒÙŠØ© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙÙŠ createLesson/updateLesson
   private async assertCourseOwnership(
     courseId: string,
     tenantId: string,
@@ -29,33 +29,8 @@ export class ModulesService {
     return course;
   }
 
-  // Sprint 2 / Task #1: enrich each lesson with the current student's
-  // completion state. If the caller isn't a student with an enrollment
-  // (e.g. teacher/admin, or an anonymous @Public() request), lessons are
-  // returned with isCompleted: false and no error is thrown.
-  async findAllByCourse(courseId: string, tenantId: string, studentId?: string) {
-    const modules = await this.modulesRepository.findAllByCourse(courseId, tenantId);
-
-    if (!studentId) {
-      return modules.map((m) => ({
-        ...m,
-        lessons: m.lessons.map((l: any) => ({ ...l, isCompleted: false })),
-      }));
-    }
-
-    const completed = await this.prisma.lessonCompletion.findMany({
-      where: { studentId, tenantId, lesson: { courseId } },
-      select: { lessonId: true },
-    });
-    const completedIds = new Set(completed.map((c) => c.lessonId));
-
-    return modules.map((m) => ({
-      ...m,
-      lessons: m.lessons.map((l: any) => ({
-        ...l,
-        isCompleted: completedIds.has(l.id),
-      })),
-    }));
+  async findAllByCourse(courseId: string, tenantId: string) {
+    return this.modulesRepository.findAllByCourse(courseId, tenantId);
   }
 
   async findById(id: string, tenantId: string) {

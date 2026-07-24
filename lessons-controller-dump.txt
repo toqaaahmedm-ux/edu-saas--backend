@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { LessonsService } from './lessons.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -12,10 +12,9 @@ export class LessonsController {
   @Get()
   getLessons(
     @Param('courseId') courseId: string,
-    @GetUser() user: any,
-    @Query('moduleId') moduleId?: string,
+    @GetUser() user: any, // âœ… BE-M02: Ù†Ø¬ÙŠØ¨ Ø§Ù„Ù€ user ÙƒØ§Ù…Ù„Ø§Ù‹
   ) {
-    return this.lessonsService.getLessons(courseId, user.id, user.role, user.tenantId, moduleId);
+    return this.lessonsService.getLessons(courseId, user.id, user.role, user.tenantId); // âœ…
   }
 
   @UseGuards(RolesGuard)
@@ -23,25 +22,16 @@ export class LessonsController {
   @Post()
   create(
     @Param('courseId') courseId: string,
-    @GetUser() user: any,
+    @GetUser() user: any, // âœ…
     @Body() body: {
       title: string;
       videoUrl?: string;
       duration?: number;
       order: number;
-      moduleId: string;
       availableAt?: string | null;
     },
   ) {
-    return this.lessonsService.create(courseId, user.id, user.role, user.tenantId, body);
-  }
-
-  @Post(':lessonId/complete')
-  completeLesson(
-    @Param('lessonId') lessonId: string,
-    @GetUser() user: any,
-  ) {
-    return this.lessonsService.completeLesson(lessonId, user.id, user.tenantId);
+    return this.lessonsService.create(courseId, user.id, user.role, user.tenantId, body); // âœ…
   }
 
   @UseGuards(RolesGuard)
@@ -49,17 +39,16 @@ export class LessonsController {
   @Put(':lessonId')
   update(
     @Param('lessonId') lessonId: string,
-    @GetUser() user: any,
+    @GetUser() user: any, // âœ…
     @Body() body: {
       title?: string;
       videoUrl?: string;
       duration?: number;
       order?: number;
-      moduleId?: string;
       availableAt?: string | null;
     },
   ) {
-    return this.lessonsService.update(lessonId, user.id, user.role, user.tenantId, body);
+    return this.lessonsService.update(lessonId, user.id, user.role, user.tenantId, body); // âœ…
   }
 
   @UseGuards(RolesGuard)
@@ -67,8 +56,8 @@ export class LessonsController {
   @Delete(':lessonId')
   delete(
     @Param('lessonId') lessonId: string,
-    @GetUser() user: any,
+    @GetUser() user: any, // âœ…
   ) {
-    return this.lessonsService.delete(lessonId, user.id, user.role, user.tenantId);
+    return this.lessonsService.delete(lessonId, user.id, user.role, user.tenantId); // âœ…
   }
 }

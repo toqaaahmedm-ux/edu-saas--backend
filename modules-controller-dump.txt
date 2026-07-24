@@ -13,7 +13,6 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
-import { OptionalAuthGuard } from '../../common/guards/optional-auth.guard';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import { Role } from '@prisma/client';
 import { CreateModuleDto } from './dto/create-module.dto';
@@ -22,18 +21,11 @@ import { CreateModuleDto } from './dto/create-module.dto';
 export class ModulesController {
   constructor(private readonly modulesService: ModulesService) {}
 
-  // Sprint 2 bugfix: @Public() alone made req.user always undefined, even
-  // for a logged-in student, because SessionAuthGuard skips JWT
-  // verification entirely when the route is public. OptionalAuthGuard
-  // actually attempts verification but never blocks the request either
-  // way, so logged-in students get req.user populated while anonymous
-  // visitors still get through.
+  // Ø§Ù„Ù‚Ø±Ø§ÙŠØ© Ø¹Ø§Ù…Ø© Ø²ÙŠ findAll/findOne ÙÙŠ courses â€” Ø§Ù„Ø·Ø§Ù„Ø¨ Ù…Ø­ØªØ§Ø¬ ÙŠØ´ÙˆÙ Ù‡ÙŠÙƒÙ„ Ø§Ù„ÙƒÙˆØ±Ø³
   @Public()
-  @UseGuards(OptionalAuthGuard)
   @Get()
   findAll(@Param('courseId') courseId: string, @GetUser() user: any) {
-    const studentId = user?.role === Role.STUDENT ? user.id : undefined;
-    return this.modulesService.findAllByCourse(courseId, user?.tenantId, studentId);
+    return this.modulesService.findAllByCourse(courseId, user?.tenantId);
   }
 
   @UseGuards(RolesGuard)

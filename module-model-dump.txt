@@ -1,0 +1,28 @@
+﻿
+> prisma\schema.prisma:402:model Module {
+  prisma\schema.prisma:403:  id          String   @id 
+@default(uuid())
+  prisma\schema.prisma:404:  tenantId    String
+  prisma\schema.prisma:405:  courseId    String
+  prisma\schema.prisma:406:  title       String
+  prisma\schema.prisma:407:  description String?
+  prisma\schema.prisma:408:  order       Int      @default(0)
+  prisma\schema.prisma:409:  createdAt   DateTime @default(now())
+  prisma\schema.prisma:410:  updatedAt   DateTime @updatedAt
+  prisma\schema.prisma:411:
+  prisma\schema.prisma:412:  tenant  Tenant   @relation(fields: 
+[tenantId], references: [id], onDelete: Cascade)
+  prisma\schema.prisma:413:  course  Course   @relation(fields: 
+[courseId], references: [id], onDelete: Cascade)
+  prisma\schema.prisma:414:  lessons Lesson[]
+  prisma\schema.prisma:415:
+  prisma\schema.prisma:416:  @@unique([courseId, order])
+  prisma\schema.prisma:417:  @@index([tenantId])
+  prisma\schema.prisma:418:  @@index([courseId])
+  prisma\schema.prisma:419:}
+  prisma\schema.prisma:420:
+  prisma\schema.prisma:421:model Lesson {
+  prisma\schema.prisma:422:  id          String      @id 
+@default(uuid())
+
+
