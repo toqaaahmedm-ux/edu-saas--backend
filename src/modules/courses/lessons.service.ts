@@ -134,11 +134,22 @@ export class LessonsService {
     const completedCount = await this.lessonsRepository.countCompletedByCourse(studentId, lesson.courseId, tenantId);
     const progress = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
+    // Sprint 2 bugfix: status must be reconciled in BOTH directions here,
+    // not just forward to COMPLETED. Without this, a course whose status
+    // was already COMPLETED (e.g. from a passing quiz attempt) stayed
+    // "Completed" forever even after progress dropped back down to a
+    // real, lesson-based percentage below 100 — exactly what showed up
+    // as a course sitting at 20% progress under the "Completed" tab.
+    // SUSPENDED is left untouched since that's an admin/teacher action,
+    // not something lesson completion should override.
+    const newStatus =
+      progress >= 100 ? 'COMPLETED' : enrollment.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
+
     const updatedEnrollment = await this.prisma.enrollment.update({
       where: { studentId_courseId: { studentId, courseId: lesson.courseId } },
       data: {
         progress,
-        ...(progress >= 100 && { status: 'COMPLETED' }),
+        status: newStatus,
       },
     });
 
