@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller, Post, UseGuards,
   UseInterceptors, UploadedFile,
 } from '@nestjs/common';
@@ -31,7 +31,7 @@ export class UploadController {
     return { url };
   }
 
-  // FEAT-05: بيرجع url + hlsUrl + publicId
+  // FEAT-05: Ø¨ÙŠØ±Ø¬Ø¹ url + hlsUrl + publicId
   @Post('course-video')
   @Roles('TEACHER', 'ADMIN')
   @UseInterceptors(FileInterceptor('video', { storage: memoryStorage() }))
@@ -44,9 +44,9 @@ export class UploadController {
     return this.uploadService.uploadCourseVideo(file, user.tenantId, user.id);
   }
 
-  // FEAT-06: رفع المستندات (PDF, DOCX, PPTX)
+  // FEAT-06: Ø±ÙØ¹ Ø§Ù„Ù…Ø³ØªÙ†Ø¯Ø§Øª (PDF, DOCX, PPTX)
   @Post('document')
-  @Roles('TEACHER', 'ADMIN')
+  @Roles('STUDENT', 'TEACHER', 'ADMIN')
   @UseInterceptors(FileInterceptor('document', { storage: memoryStorage() }))
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { document: { type: 'string', format: 'binary' } } } })
