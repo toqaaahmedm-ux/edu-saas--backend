@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -23,10 +23,11 @@ export class CoursesService {
     limit: number = 10,
     search?: string,
     category?: string,
+    sortBy?: string,
   ) {
     const skip = (page - 1) * limit;
     const { courses, total } = await this.coursesRepository.findAllPaginated(
-      tenantId, skip, limit, search, category,
+      tenantId, skip, limit, search, category, sortBy,
     );
     return {
       courses,
@@ -66,7 +67,7 @@ export class CoursesService {
     if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
 
     // Plan limits enforcement: mirrors the maxStudents check already done
-    // in EnrollmentsService — same transaction pattern to avoid a race
+    // in EnrollmentsService â€” same transaction pattern to avoid a race
     // condition where two concurrent requests both pass the count check
     // before either course is actually created.
     const subscription = await this.billingService.getTenantSubscription(data.tenantId);
@@ -164,7 +165,7 @@ export class CoursesService {
       where: { courseId: { in: courseIds } },
     });
 
-    // T-07 FIX: avgRating replaced with completionRate — there's no Rating
+    // T-07 FIX: avgRating replaced with completionRate â€” there's no Rating
     // model in the DB so avgRating always returned 0 and was misleading.
     // completionRate is calculated from real enrollment data we already have.
     const completedEnrollments = await this.prisma.enrollment.count({
@@ -248,7 +249,7 @@ export class CoursesService {
     const totalRevenue = await this.coursesRepository.sumRevenue(tenantId);
     return { totalCourses, totalStudents, totalRevenue };
   }
-  // ─── Lesson Methods (T-04) ────────────────────────────────────────────────
+  // â”€â”€â”€ Lesson Methods (T-04) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async createLesson(
     courseId: string,

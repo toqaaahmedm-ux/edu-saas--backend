@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -36,10 +36,11 @@ export class CoursesController {
     @Query('limit') limit = '10',
     @Query('search') search?: string,
     @Query('category') category?: string,
+    @Query('sortBy') sortBy?: string,
   ) {
     const tenantId = (req as any).tenantId;
     if (!tenantId) throw new BadRequestException('Tenant context required');
-    return this.coursesService.findAll(tenantId, +page, +limit, search, category);
+    return this.coursesService.findAll(tenantId, +page, +limit, search, category, sortBy);
   }
 
   @UseGuards(RolesGuard)
@@ -120,12 +121,12 @@ export class CoursesController {
     });
   }
 
-  // T-02 FIX: this endpoint never used a class-validated DTO — the body
+  // T-02 FIX: this endpoint never used a class-validated DTO â€” the body
   // was typed with an inline TypeScript object literal that did not
   // declare `videoUrl`. Because this is a plain object type (not a
   // class), NestJS's ValidationPipe whitelist stripping does not apply
   // here, so videoUrl was actually still reaching this handler at
-  // runtime — the type annotation just didn't say so, and the real drop
+  // runtime â€” the type annotation just didn't say so, and the real drop
   // happened further down in CoursesRepository.update(). Adding
   // `videoUrl` here keeps the type signature accurate and self-documenting.
   @UseGuards(RolesGuard)
@@ -181,7 +182,7 @@ export class CoursesController {
   ) {
     return this.coursesService.delete(id, user.tenantId);
   }
-  // ─── Lesson Endpoints (T-04) ────────────────────────────────────────────
+  // â”€â”€â”€ Lesson Endpoints (T-04) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
