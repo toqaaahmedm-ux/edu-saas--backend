@@ -36,7 +36,7 @@ export class UsersController {
   @Patch('me')
   updateMe(
     @GetUser('id') id: string,
-    @Body() body: { name?: string },
+    @Body() body: { name?: string; avatar?: string },
   ) {
     return this.usersService.updateProfile(id, body);
   }

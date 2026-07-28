@@ -34,7 +34,7 @@ export class UsersService {
     return user;
   }
 
-  async updateProfile(id: string, data: { name?: string }) {
+  async updateProfile(id: string, data: { name?: string; avatar?: string }) {
     await this.findById(id);
     return this.usersRepository.updateProfile(id, data);
   }
