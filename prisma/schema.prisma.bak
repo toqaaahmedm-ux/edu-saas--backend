@@ -8,7 +8,7 @@ generator client {
   engineType = "library"
 }
 
-// ─── Enums ─────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Enums Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 enum Role {
   SUPER_ADMIN
@@ -17,9 +17,9 @@ enum Role {
   STUDENT
 }
 
-// NEW (Admin Report — Bug #1/#2): lets us block login for teachers who
+// NEW (Admin Report Ã¢â‚¬â€ Bug #1/#2): lets us block login for teachers who
 // haven't been approved yet, or for anyone an admin has suspended.
-// Students default straight to ACTIVE — the approval gate is only meant
+// Students default straight to ACTIVE Ã¢â‚¬â€ the approval gate is only meant
 // for TEACHER (and future STAFF-type) roles per the report's flow.
 enum UserStatus {
   PENDING
@@ -82,12 +82,7 @@ enum AttendanceStatus {
   EXCUSED
 }
 
-enum ExcuseStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-// ─── Core tenant & billing models ───────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Core tenant & billing models Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 model Tenant {
   id            String       @id @default(uuid())
@@ -105,7 +100,7 @@ mediaAssets     MediaAsset[]
   gradeScale     String     @default("PERCENT_AF")
   academicConfig Json?
 
-  // Per-tenant branding — lets each school/academy feel like its own
+  // Per-tenant branding Ã¢â‚¬â€ lets each school/academy feel like its own
   // platform instead of a generic white-label shell.
   displayName    String?
   logoUrl        String?
@@ -136,7 +131,7 @@ mediaAssets     MediaAsset[]
   grades         Grade[]
   // fix: AssignmentSubmission is now directly tenant-scoped (see model)
   assignmentSubmissions AssignmentSubmission[]
-ratings               Rating[]
+
   @@index([status])
 }
 
@@ -152,8 +147,8 @@ model Plan {
   maxCourses   Int @default(10)
   maxStorageGb Int @default(5)
   maxLiveHours Int @default(0)
-  // NEW (Admin Report §4.1, P1/P2): course/enrollment limits already existed
-  // but quizzes and teacher headcount had no cap at all — a tenant on the
+  // NEW (Admin Report Ã‚Â§4.1, P1/P2): course/enrollment limits already existed
+  // but quizzes and teacher headcount had no cap at all Ã¢â‚¬â€ a tenant on the
   // cheapest plan could create unlimited quizzes or hire unlimited teachers.
   maxQuizzes   Int @default(20)
   maxTeachers  Int @default(5)
@@ -226,7 +221,7 @@ model AuditLog {
   @@index([actorId])
 }
 
-// ─── Users ─────────────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Users Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 model User {
   id             String   @id @default(uuid())
@@ -240,11 +235,11 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // NEW (Admin Report Bug #1/#2, §4.1 P1/P2): the approval gate. Students
+  // NEW (Admin Report Bug #1/#2, Ã‚Â§4.1 P1/P2): the approval gate. Students
   // default to ACTIVE (no approval needed); TEACHER accounts created via
   // self-registration start PENDING and are blocked from login until an
   // admin approves them. approvedAt/approvedBy give an audit trail of who
-  // approved which teacher and when — both null until that happens.
+  // approved which teacher and when Ã¢â‚¬â€ both null until that happens.
   status      UserStatus @default(ACTIVE)
   approvedAt  DateTime?
   approvedBy  String?
@@ -266,7 +261,6 @@ model User {
   submissions   AssignmentSubmission[]
   attendances   Attendance[]
   grades        Grade[]
-  ratings       Rating[]
   // students can belong to a class section
   classSection   ClassSection? @relation("SectionStudents", fields: [classSectionId], references: [id])
   classSectionId String?
@@ -279,9 +273,9 @@ model User {
   @@index([status])
 }
 
-// ─── Academic calendar ───────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Academic calendar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-// one row per school year (e.g. "2024–2025"); only one can be active at a time
+// one row per school year (e.g. "2024Ã¢â‚¬â€œ2025"); only one can be active at a time
 model AcademicYear {
   id        String   @id @default(uuid())
   tenantId  String
@@ -361,7 +355,6 @@ model ClassSection {
   @@index([homeroomTeacherId])
 }
 
-// ─── Course structure ────────────────────────────────────────────────────
 
 model Course {
   id           String       @id @default(uuid())
@@ -377,7 +370,7 @@ model Course {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  // academic context — all optional so existing courses don't break
+  // academic context Ã¢â‚¬â€ all optional so existing courses don't break
   academicYearId String?
   semesterId     String?
   gradeLevelId   String?
@@ -393,7 +386,6 @@ model Course {
   certificates Certificate[]
   modules      Module[]
   assignments  Assignment[]
- ratings      Rating[]
 
   academicYear  AcademicYear?  @relation(fields: [academicYearId], references: [id])
   semester      Semester?      @relation(fields: [semesterId], references: [id])
@@ -405,27 +397,6 @@ model Course {
   @@index([instructorId])
   @@index([semesterId])
   @@index([gradeLevelId])
-}
-
-// ─── Course Ratings ─────────────────────────────────────────────────
-
-model Rating {
-  id        String   @id @default(uuid())
-  tenantId  String
-  courseId  String
-  studentId String
-  value     Int      // 1 to 5
-  comment   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, courseId])
-  @@index([tenantId])
-  @@index([courseId])
 }
 
 // a chapter/unit that groups lessons inside a course
@@ -497,14 +468,13 @@ model Lesson {
   @@index([moduleId])
 }
 
-// ─── Quiz ──────────────────────────────────────────────────────────────
 
 model Quiz {
   id          String   @id @default(uuid())
   tenantId    String
   title       String
   timeLimit   Int      @default(600)
-  passScore   Int      @default(70)   // was missing before — the frontend value was silently dropped
+  passScore   Int      @default(70)   // was missing before Ã¢â‚¬â€ the frontend value was silently dropped
   maxAttempts Int      @default(3)
   courseId    String
   createdAt   DateTime @default(now())
@@ -532,7 +502,6 @@ model Question {
   @@index([quizId])
 }
 
-// ─── Enrollment & progress ───────────────────────────────────────────────
 
 model Enrollment {
   id         String           @id @default(uuid())
@@ -573,7 +542,6 @@ model QuizAttempt {
   @@index([studentId, quizId])
 }
 
-// ─── Assignments & submissions ───────────────────────────────────────────
 
 model Assignment {
   id           String    @id @default(uuid())
@@ -599,7 +567,7 @@ model Assignment {
 model AssignmentSubmission {
   id           String           @id @default(uuid())
   // fix: submission is now directly tenant-scoped instead of relying only on
-  // assignment.tenantId — same pattern as the Quiz tenantId security fix.
+  // assignment.tenantId Ã¢â‚¬â€ same pattern as the Quiz tenantId security fix.
   tenantId     String
   assignmentId String
   studentId    String
@@ -623,48 +591,23 @@ model AssignmentSubmission {
   @@index([studentId])
 }
 
-// ─── Attendance ─────────────────────────────────────────────────────────
 
-// one row per student per lesson — bulk-created by the teacher at the end of class
-model Attendance {
-  id        String           @id @default(uuid())
-  tenantId  String
-  lessonId  String
-  studentId String
-  status    AttendanceStatus @default(PRESENT)
-  note      String?
-  markedAt  DateTime         @default(now())
-  createdAt DateTime         @default(now())
-
-// excuse request fields — student submits a reason + optional file,
-  // teacher/admin reviews it; approving flips status to EXCUSED
-  excuseStatus      ExcuseStatus?
-  excuseReason      String?
-  excuseFileUrl     String?
-  excuseRequestedAt DateTime?
-  excuseReviewedAt  DateTime?
-  excuseReviewedBy  String?
-
-  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([lessonId, studentId])
-  @@index([tenantId])
-  @@index([lessonId])
-  @@index([studentId])
-  @@index([excuseStatus])
+// one row per student per lesson Ã¢â‚¬â€ bulk-created by the teacher at the end of class
+enum ExcuseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+model Attendance {n  id        String           @id @default(uuid())n  tenantId  Stringn  lessonId  Stringn  studentId Stringn  status    AttendanceStatus @default(PRESENT)n  note      String?n  markedAt  DateTime         @default(now())n  createdAt DateTime         @default(now())nn  excuseStatus      ExcuseStatus?n  excuseReason      String?n  excuseFileUrl     String?n  excuseRequestedAt DateTime?n  excuseReviewedAt  DateTime?n  excuseReviewedBy  String?nn  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)n  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)n  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)nn  @@unique([lessonId, studentId])n  @@index([tenantId])n  @@index([lessonId])n  @@index([studentId])n  @@index([excuseStatus])n}n
 }
 
-// ─── Grades ────────────────────────────────────────────────────────────
 
-// final computed grade per student per course — recalculated whenever quiz/assignment scores change
 model Grade {
   id           String   @id @default(uuid())
   tenantId     String
   studentId    String
   courseId     String
-  score        Decimal  @db.Decimal(5, 2)   // weighted average 0–100
+  score        Decimal  @db.Decimal(5, 2)   // weighted average 0Ã¢â‚¬â€œ100
   letterGrade  String?                       // A / B+ / etc., derived from tenant gradeScale
   gpa          Decimal? @db.Decimal(3, 2)   // only populated for UNIVERSITY tenants
   notes        String?
@@ -679,7 +622,7 @@ model Grade {
   @@index([studentId])
 }
 
-// ─── Certificates ───────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Certificates Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 model Certificate {
   id              String   @id @default(uuid())
@@ -704,7 +647,7 @@ model Certificate {
   @@index([studentId])
 }
 
-// ─── Auth & sessions ────────────────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Auth & sessions Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 model Session {
   id        String   @id @default(uuid())
@@ -764,7 +707,7 @@ enum MediaAssetType {
 
 // Storage usage tracking fix: uploads went to Cloudinary with no record
 // of file size or which tenant owns them, so per-tenant storage limits
-// (Plan.maxStorageGb) had no real data to enforce against — usage always
+// (Plan.maxStorageGb) had no real data to enforce against Ã¢â‚¬â€ usage always
 // returned 0. This model gives every uploaded file a tenant-scoped row.
 model MediaAsset {
   id        String         @id @default(uuid())

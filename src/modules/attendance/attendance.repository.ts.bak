@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AttendanceStatus, ExcuseStatus } from '@prisma/client';
+import { AttendanceStatus } from '@prisma/client';
 
 @Injectable()
 export class AttendanceRepository {
@@ -70,48 +70,5 @@ export class AttendanceRepository {
       }),
     );
     return this.prisma.$transaction(ops);
-  }
-
-  // --- excuse flow ---
-
-  // used by both the student (ownership check) and the teacher (course
-  // ownership check via lesson.course.instructorId)
-  findByIdWithLessonCourse(id: string, tenantId: string) {
-    return this.prisma.attendance.findFirst({
-      where: { id, tenantId },
-      include: {
-        lesson: { select: { id: true, title: true, course: { select: { id: true, instructorId: true } } } },
-        student: { select: { id: true, name: true } },
-      },
-    });
-  }
-
-  requestExcuse(id: string, tenantId: string, reason: string, fileUrl?: string) {
-    return this.prisma.attendance.update({
-      where: { id },
-      data: {
-        excuseStatus: ExcuseStatus.PENDING,
-        excuseReason: reason,
-        excuseFileUrl: fileUrl,
-        excuseRequestedAt: new Date(),
-        // reset any previous review in case this is a re-submission after a rejection
-        excuseReviewedAt: null,
-        excuseReviewedBy: null,
-      },
-    });
-  }
-
-  reviewExcuse(id: string, decision: 'APPROVED' | 'REJECTED', reviewerId: string) {
-    return this.prisma.attendance.update({
-      where: { id },
-      data: {
-        excuseStatus: decision === 'APPROVED' ? ExcuseStatus.APPROVED : ExcuseStatus.REJECTED,
-        excuseReviewedAt: new Date(),
-        excuseReviewedBy: reviewerId,
-        // approving the excuse flips the actual attendance status too,
-        // so the student's attendance rate reflects it
-        ...(decision === 'APPROVED' ? { status: AttendanceStatus.EXCUSED } : {}),
-      },
-    });
   }
 }

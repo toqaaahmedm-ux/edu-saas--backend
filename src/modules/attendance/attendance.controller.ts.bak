@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Patch,
   Param,
   Body,
   UseGuards,
@@ -14,8 +13,6 @@ import { GetUser } from '../../common/decorators/get-user.decorator';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import { Role } from '@prisma/client';
 import { MarkAttendanceDto } from './dto/mark-attendance.dto';
-import { RequestExcuseDto } from './dto/request-excuse.dto';
-import { ReviewExcuseDto } from './dto/review-excuse.dto';
 
 @Controller('lessons/:lessonId/attendance')
 export class AttendanceController {
@@ -70,37 +67,5 @@ export class CourseAttendanceController {
     @GetUser() user: any,
   ) {
     return this.attendanceService.getStudentCourseSummary(courseId, studentId, user.tenantId);
-  }
-}
-
-// third controller, scoped directly by attendance record id — used for the
-// excuse request flow, which isn't naturally lesson- or course-scoped from
-// the frontend's point of view (the student already has the record id)
-@Controller('attendance')
-export class AttendanceExcuseController {
-  constructor(private readonly attendanceService: AttendanceService) {}
-
-  @UseGuards(RolesGuard)
-  @Roles(Role.STUDENT)
-  @Post(':id/excuse')
-  @AuditAction('ATTENDANCE_EXCUSE_REQUESTED')
-  requestExcuse(
-    @Param('id') id: string,
-    @GetUser() user: any,
-    @Body() body: RequestExcuseDto,
-  ) {
-    return this.attendanceService.requestExcuse(id, user.id, user.tenantId, body.reason, body.fileUrl);
-  }
-
-  @UseGuards(RolesGuard)
-  @Roles(Role.TEACHER, Role.ADMIN)
-  @Patch(':id/excuse/review')
-  @AuditAction('ATTENDANCE_EXCUSE_REVIEWED')
-  reviewExcuse(
-    @Param('id') id: string,
-    @GetUser() user: any,
-    @Body() body: ReviewExcuseDto,
-  ) {
-    return this.attendanceService.reviewExcuse(id, user.tenantId, user.id, user.role, body.decision);
   }
 }

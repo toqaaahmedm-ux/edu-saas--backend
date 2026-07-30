@@ -345,4 +345,62 @@ export class CoursesService {
     await this.prisma.lesson.delete({ where: { id: lessonId } });
     return { message: 'Lesson deleted successfully' };
   }
+  // ─── Ratings (Task #6) ──────────────────────────────────────────────
+
+  async rateCourse(
+    courseId: string,
+    studentId: string,
+    tenantId: string,
+    data: { value: number; comment?: string },
+  ) {
+    // must be enrolled
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId } },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in this course to rate it');
+    }
+
+    // must have completed the course (100% progress)
+    if (enrollment.progress < 100 && enrollment.status !== 'COMPLETED') {
+      throw new BadRequestException(
+        'You can only rate a course after completing it',
+      );
+    }
+
+    // upsert: student can update their existing rating
+    return this.prisma.rating.upsert({
+      where: { studentId_courseId: { studentId, courseId } },
+      create: {
+        tenantId,
+        courseId,
+        studentId,
+        value: data.value,
+        comment: data.comment,
+      },
+      update: {
+        value: data.value,
+        comment: data.comment,
+      },
+    });
+  }
+
+  async getCourseRatings(courseId: string, tenantId: string) {
+    const ratings = await this.prisma.rating.findMany({
+      where: { courseId, tenantId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        student: { select: { id: true, name: true, avatar: true } },
+      },
+    });
+
+    const count = ratings.length;
+    const average =
+      count > 0
+        ? Math.round((ratings.reduce((sum, r) => sum + r.value, 0) / count) * 10) / 10
+        : 0;
+
+    return { ratings, average, count };
+  }
 }

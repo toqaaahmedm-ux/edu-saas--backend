@@ -23,6 +23,7 @@ import { RequireFeature } from '../../common/decorators/require-feature.decorato
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import { Role, CourseStatus } from '@prisma/client';
 import { CreateCourseDto } from './dto/create-course.dto';
+import { CreateRatingDto } from './dto/create-rating.dto';
 
 @Controller('courses')
 export class CoursesController {
@@ -121,14 +122,6 @@ export class CoursesController {
     });
   }
 
-  // T-02 FIX: this endpoint never used a class-validated DTO â€” the body
-  // was typed with an inline TypeScript object literal that did not
-  // declare `videoUrl`. Because this is a plain object type (not a
-  // class), NestJS's ValidationPipe whitelist stripping does not apply
-  // here, so videoUrl was actually still reaching this handler at
-  // runtime â€” the type annotation just didn't say so, and the real drop
-  // happened further down in CoursesRepository.update(). Adding
-  // `videoUrl` here keeps the type signature accurate and self-documenting.
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
   @Put(':id')
@@ -143,7 +136,7 @@ export class CoursesController {
       category?: string;
       price?: number;
       status?: CourseStatus;
-      videoUrl?: string; // T-02 FIX
+      videoUrl?: string;
     },
   ) {
     return this.coursesService.update(id, user.id, user.role, user.tenantId, body);
@@ -182,7 +175,7 @@ export class CoursesController {
   ) {
     return this.coursesService.delete(id, user.tenantId);
   }
-  // â”€â”€â”€ Lesson Endpoints (T-04) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Lesson Endpoints (T-04)
 
   @UseGuards(RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
@@ -239,5 +232,30 @@ export class CoursesController {
     @GetUser() user: any,
   ) {
     return this.coursesService.deleteLesson(lessonId, courseId, user.tenantId, user.id);
+  }
+
+  // Ratings (Task #6)
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.STUDENT)
+  @Post(':id/ratings')
+  @AuditAction('COURSE_RATED')
+  rateCourse(
+    @Param('id') courseId: string,
+    @GetUser() user: any,
+    @Body() body: CreateRatingDto,
+  ) {
+    return this.coursesService.rateCourse(courseId, user.id, user.tenantId, body);
+  }
+
+  @Public()
+  @Get(':id/ratings')
+  getCourseRatings(
+    @Param('id') courseId: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    if (!tenantId) throw new BadRequestException('Tenant context required');
+    return this.coursesService.getCourseRatings(courseId, tenantId);
   }
 }
