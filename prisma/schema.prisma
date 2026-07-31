@@ -133,6 +133,7 @@ mediaAssets     MediaAsset[]
   modules        Module[]
   assignments    Assignment[]
   attendances    Attendance[]
+  lessonProgress LessonProgress[]
   grades         Grade[]
   // fix: AssignmentSubmission is now directly tenant-scoped (see model)
   assignmentSubmissions AssignmentSubmission[]
@@ -140,6 +141,23 @@ ratings               Rating[]
   @@index([status])
 }
 
+model LessonProgress {
+  id              String   @id @default(uuid())
+  tenantId        String
+  studentId       String
+  lessonId        String
+  positionSeconds Int      @default(0)
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lessonId])
+  @@index([tenantId])
+  @@index([studentId])
+  @@index([lessonId])
+}
 model Plan {
   id           String       @id @default(uuid())
   name         String       @unique
@@ -265,6 +283,7 @@ model User {
   // sprint 1 additions
   submissions   AssignmentSubmission[]
   attendances   Attendance[]
+  lessonProgress LessonProgress[]
   grades        Grade[]
   ratings       Rating[]
   // students can belong to a class section
@@ -489,6 +508,7 @@ model Lesson {
   course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   module      Module?      @relation(fields: [moduleId], references: [id], onDelete: SetNull)
   attendances Attendance[]
+  lessonProgress LessonProgress[]
   completions LessonCompletion[]
 
   @@unique([courseId, order])
@@ -505,6 +525,8 @@ model Quiz {
   title       String
   timeLimit   Int      @default(600)
   passScore   Int      @default(70)   // was missing before — the frontend value was silently dropped
+  openAt      DateTime?
+  closeAt     DateTime?
   maxAttempts Int      @default(3)
   courseId    String
   createdAt   DateTime @default(now())
