@@ -21,6 +21,10 @@ export interface AnswerSnapshot {
   isCorrect: boolean;
 }
 
+// QUIZ-WINDOW-NEW: نوع مشترك لحالة إتاحة الكويز، بيستخدمه الفرونت لعرض
+// الشارة/العد التنازلي الصحيح.
+type QuizAvailability = 'upcoming' | 'open' | 'closed';
+
 @Injectable()
 export class QuizService {
   constructor(
@@ -30,6 +34,14 @@ export class QuizService {
     private readonly prisma: PrismaService,
     private readonly billingService: BillingService,
   ) { }
+
+  // QUIZ-WINDOW-NEW: helper مشترك لحساب حالة الإتاحة بناءً على openAt/closeAt
+  private getAvailability(quiz: { openAt?: Date | null; closeAt?: Date | null }): QuizAvailability {
+    const now = new Date();
+    if (quiz.openAt && now < new Date(quiz.openAt)) return 'upcoming';
+    if (quiz.closeAt && now > new Date(quiz.closeAt)) return 'closed';
+    return 'open';
+  }
 
   async getAllQuizzes(tenantId: string, studentId: string, courseId?: string) {
     const enrollments = await this.prisma.enrollment.findMany({
@@ -42,7 +54,15 @@ export class QuizService {
       throw new ForbiddenException('You are not enrolled in this course');
     }
 
-    return this.quizRepository.findAllWithCourse(tenantId, enrolledCourseIds, courseId);
+    const quizzes = await this.quizRepository.findAllWithCourse(tenantId, enrolledCourseIds, courseId);
+
+    // QUIZ-WINDOW-NEW: نضيف حالة الإتاحة الجاهزة لكل كويز عشان الفرونت
+    // يعرض الشارة الصح من غير ما يحتاج يحسب بنفسه (وده أدق لأنه محسوب
+    // بوقت السيرفر مش وقت جهاز الطالب).
+    return quizzes.map((q) => ({
+      ...q,
+      availability: this.getAvailability(q),
+    }));
   }
 
   async getQuizWithQuestions(quizId: string, tenantId: string, studentId: string) {
@@ -57,7 +77,7 @@ export class QuizService {
     }
 
     const shuffled = [...quiz.questions].sort(() => Math.random() - 0.5);
-    return { ...quiz, questions: shuffled };
+    return { ...quiz, questions: shuffled, availability: this.getAvailability(quiz) };
   }
 
   async startQuiz(tenantId: string, studentId: string, quizId: string) {
@@ -69,6 +89,19 @@ export class QuizService {
     });
     if (!enrollment) {
       throw new ForbiddenException('You must be enrolled in the course to take this quiz');
+    }
+
+    // QUIZ-WINDOW-NEW: منع بدء الكويز قبل معاده أو بعد قفله. بنحسب وقت
+    // السيرفر مش وقت الطالب عشان محدش يقدر يلف الساعة عنده ويفتح كويز
+    // قافل.
+    const now = new Date();
+    if (quiz.openAt && now < new Date(quiz.openAt)) {
+      throw new ForbiddenException(
+        `This quiz is not open yet. It opens at ${new Date(quiz.openAt).toISOString()}`,
+      );
+    }
+    if (quiz.closeAt && now > new Date(quiz.closeAt)) {
+      throw new ForbiddenException('This quiz is closed and no longer accepts new attempts.');
     }
 
     const completedAttempts = await this.quizRepository.findAllCompletedAttempts(studentId, quizId);
@@ -109,6 +142,12 @@ export class QuizService {
     if (!enrollment) {
       throw new ForbiddenException('You must be enrolled in the course to submit this quiz');
     }
+
+    // QUIZ-WINDOW-NEW: هنا بنسمح بالتسليم حتى لو closeAt عدّى — لأن
+    // الطالب يكون بدأ المحاولة أصلاً قبل القفل (ده اتحقق منه في
+    // startQuiz)، ومنعه من التسليم دلوقتي معناه ضياع إجاباته ظلمًا.
+    // القفل الحقيقي هو منع أي محاولة *جديدة* تبدأ بعد closeAt، مش منع
+    // تسليم محاولة شغالة أصلاً.
 
     const attempt = await this.quizRepository.findAttempt(studentId, quizId);
     if (!attempt) throw new BadRequestException('You must start the quiz first');
@@ -269,6 +308,10 @@ export class QuizService {
       title: string;
       timeLimit?: number;
       passScore?: number;
+      // QUIZ-WINDOW-NEW: اختياريين — لو المعلم سابهم فاضيين، الكويز
+      // يفضل متاح على طول زي ما كان قبل كده (سلوك افتراضي غير كاسر).
+      openAt?: string;
+      closeAt?: string;
       questions: {
         text: string;
         options: string[];
@@ -293,6 +336,14 @@ export class QuizService {
       throw new BadRequestException('Quiz must have at least one question');
     }
 
+    // QUIZ-WINDOW-NEW: تحقق منطقي بسيط — لو الاتنين محددين، لازم القفل
+    // يكون بعد الفتح.
+    const openAtDate = data.openAt ? new Date(data.openAt) : null;
+    const closeAtDate = data.closeAt ? new Date(data.closeAt) : null;
+    if (openAtDate && closeAtDate && closeAtDate <= openAtDate) {
+      throw new BadRequestException('closeAt must be after openAt');
+    }
+
     const subscription = await this.billingService.getTenantSubscription(tenantId);
 
     const quiz = await this.prisma.$transaction(async (tx) => {
@@ -315,6 +366,8 @@ export class QuizService {
           courseId: data.courseId,
           timeLimit: data.timeLimit ?? 600,
           passScore: data.passScore ?? 70,
+          openAt: openAtDate,
+          closeAt: closeAtDate,
         },
       });
 
