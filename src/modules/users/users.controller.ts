@@ -1,6 +1,7 @@
-import {
+﻿import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Param,
@@ -14,22 +15,28 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
+import { AuditAction } from '../../common/interceptors/audit.interceptor';
+import { CreateUserDto } from './dto/create-user.dto';
 
-@Controller()
+@Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(SessionAuthGuard)
   @Get('me')
-  getMe(@GetUser('id') id: string) {
-    return this.usersService.findById(id);
+  async getMe(@GetUser() tokenUser: any) {
+    const dbUser = await this.usersService.findById(tokenUser.id);
+    return {
+      ...dbUser,
+      impersonatedBy: tokenUser.impersonatedBy ?? null,
+    };
   }
 
   @UseGuards(SessionAuthGuard)
   @Patch('me')
   updateMe(
     @GetUser('id') id: string,
-    @Body() body: { name?: string },
+    @Body() body: { name?: string; avatar?: string },
   ) {
     return this.usersService.updateProfile(id, body);
   }
@@ -45,35 +52,72 @@ export class UsersController {
 
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  @Get('admin/users')
+  @Get('admin')
   findAll(
     @GetUser() user: any,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
   ) {
-    // بنمرر (tenantId, page, limit)
     return this.usersService.findAll(user.tenantId, +page, +limit);
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  @Delete('admin/users/:id')
+  @Delete('admin/:id')
   delete(
     @Param('id') id: string,
     @GetUser() user: any,
   ) {
-    //  بنمرر (tenantId, id, requestUserId)
     return this.usersService.delete(user.tenantId, id, user.id);
   }
 
+  @AuditAction('USER_ROLE_UPDATED')
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  @Patch('admin/users/:id/role')
+  @Patch('admin/:id/role')
   updateRole(
     @Param('id') id: string,
     @GetUser() user: any,
     @Body() body: { role: Role },
   ) {
-    return this.usersService.updateRole(id, body.role, user.id);
+    return this.usersService.updateRole(id, user.tenantId, body.role, user.id);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('admin/pending')
+  getPendingTeachers(@GetUser() user: any) {
+    return this.usersService.getPendingTeachers(user.tenantId);
+  }
+
+  @AuditAction('TEACHER_APPROVED')
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Patch('admin/:id/approve')
+  approveTeacher(
+    @Param('id') id: string,
+    @GetUser() user: any,
+  ) {
+    return this.usersService.approveTeacher(id, user.tenantId, user.id);
+  }
+
+  @AuditAction('TEACHER_REJECTED')
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Patch('admin/:id/reject')
+  rejectTeacher(
+    @Param('id') id: string,
+    @GetUser() user: any,
+  ) {
+    return this.usersService.rejectTeacher(id, user.tenantId);
+  }
+
+
+  @AuditAction('USER_CREATED')
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('admin')
+  createUser(@GetUser() user: any, @Body() dto: CreateUserDto) {
+    return this.usersService.createUser(user.tenantId, dto);
   }
 }

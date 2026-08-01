@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import * as Sentry from '@sentry/node';
 
 @Catch()  // ← بيمسك كل الـ exceptions مش بس HttpException
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -44,6 +45,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
     this.logger.error(
       `${request.method} ${request.url} — ${status} — ${exception instanceof Error ? exception.message : exception}`,
     );
+
+    // Report real, unexpected errors to Sentry (5xx only — a 404 for
+    // a wrong URL or a 401 from a bad login isn't a bug in our code,
+    // it's just this filter had to catch it too). This is the one place
+    // in the app that sees every exception, since @Catch() with no
+    // argument catches everything, not just HttpException.
+    if (status === HttpStatus.INTERNAL_SERVER_ERROR && process.env.SENTRY_DSN) {
+      Sentry.captureException(exception);
+    }
 
     response.status(status).json({
       success: false,

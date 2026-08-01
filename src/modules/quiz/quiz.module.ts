@@ -5,9 +5,9 @@ import { QuizRepository } from './quiz.repository';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { CertificatesModule } from '../certificates/certificates.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-
+import { BillingModule } from '../billing/billing.module';
 @Module({
-  imports: [PrismaModule, CertificatesModule, NotificationsModule],
+  imports: [PrismaModule, CertificatesModule, NotificationsModule, BillingModule],
   controllers: [QuizController],
   providers: [QuizService, QuizRepository],
   exports: [QuizService],

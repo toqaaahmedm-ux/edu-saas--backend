@@ -3,7 +3,7 @@ import { UsersService } from './users.service';
 import { UsersRepository } from './users.repository';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 const mockUsersRepository = {
   findAll: jest.fn(),
@@ -16,7 +16,7 @@ const mockUsersRepository = {
   countByRole: jest.fn(),
 };
 
-jest.mock('bcrypt', () => ({
+jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
   hash: jest.fn().mockResolvedValue('new_hashed_password'),
 }));
@@ -118,20 +118,49 @@ describe('UsersService', () => {
   });
 
   // ── updateRole ────────────────────────────────────────────────────────────
+ // ── updateRole ────────────────────────────────────────────────────────────
   describe('updateRole', () => {
-    it('يغير الـ role بنجاح', async () => {
-      mockUsersRepository.findById.mockResolvedValue(mockUser);
-      mockUsersRepository.updateRole.mockResolvedValue({ ...mockUser, role: Role.ADMIN });
+    it('يغير الـ role بنجاح لمستخدم من نفس الـ tenant', async () => {
+      mockUsersRepository.findById.mockResolvedValue({ ...mockUser, tenantId: 'tenant-123' });
+      mockUsersRepository.updateRole.mockResolvedValue({ ...mockUser, role: Role.TEACHER });
 
-      const result = await service.updateRole('user-123', Role.ADMIN, 'admin-999');
-      expect(result.role).toBe(Role.ADMIN);
+      const result = await service.updateRole('user-123', 'tenant-123', Role.TEACHER, 'admin-999');
+      expect(result.role).toBe(Role.TEACHER);
     });
 
     it('يرمي ForbiddenException لو حاول يغير role نفسه', async () => {
-      await expect(service.updateRole('user-123', Role.ADMIN, 'user-123')).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.updateRole('user-123', 'tenant-123', Role.ADMIN, 'user-123'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('يرمي ForbiddenException لو حاول يعيّن SUPER_ADMIN', async () => {
+      await expect(
+        service.updateRole('user-123', 'tenant-123', Role.SUPER_ADMIN, 'admin-999'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('يرمي ForbiddenException لو المستخدم المستهدف في tenant مختلف', async () => {
+      mockUsersRepository.findById.mockResolvedValue({ ...mockUser, tenantId: 'tenant-OTHER' });
+
+      await expect(
+        service.updateRole('user-123', 'tenant-123', Role.TEACHER, 'admin-999'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('يرمي ForbiddenException لو المستخدم المستهدف SUPER_ADMIN بالفعل', async () => {
+      mockUsersRepository.findById.mockResolvedValue({
+        ...mockUser,
+        tenantId: 'tenant-123',
+        role: Role.SUPER_ADMIN,
+      });
+
+      await expect(
+        service.updateRole('user-123', 'tenant-123', Role.TEACHER, 'admin-999'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
-
+  
   // ── delete ────────────────────────────────────────────────────────────────
   describe('delete', () => {
     it('يحذف user بنجاح', async () => {

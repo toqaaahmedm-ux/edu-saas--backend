@@ -4,8 +4,11 @@ import {
   Post,
   Param,
   Body,
+  Query,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { CertificatesService } from './certificates.service';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -38,6 +41,34 @@ export class CertificatesController {
       institutionName: body.institutionName || 'EduSaaS',
       facultyName:     body.facultyName     || 'Online Learning',
     });
+  }
+
+  // PDF-NEW: تنزيل الشهادة كـ PDF حقيقي مولّد من السيرفر عبر Puppeteer،
+  // بدل الاعتماد على window.print() في المتصفح. نفس الـ Guard المستخدم
+  // في findOne بالظبط، فمفيش أي تغيير في مستوى الحماية.
+  @UseGuards(SessionAuthGuard)
+  @Get(':id/pdf')
+  @AuditAction('CERTIFICATE_ACCESSED')
+  async downloadPdf(
+    @Param('id') id: string,
+    @Query('lang') lang: string,
+    @GetUser() user: any,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.certificatesService.generateCertificatePdf(
+      id,
+      user.tenantId,
+      user.id,
+      user.role,
+      lang === 'ar' ? 'ar' : 'en',
+    );
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="certificate-${id}.pdf"`,
+      'Content-Length': pdfBuffer.length,
+    });
+    res.end(pdfBuffer);
   }
 
   // BE-C05 FIX: كان مفتوح بدون أي Guard خالص — أي حد (حتى من غير تسجيل

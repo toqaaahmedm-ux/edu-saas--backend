@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -15,13 +15,15 @@ import {
 import { Request } from 'express';
 import { CoursesService } from './courses.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { FeatureGuard } from '../../common/guards/feature.guard'; // ✅ BE-H02
+import { FeatureGuard } from '../../common/guards/feature.guard'; // BE-H02
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequireFeature } from '../../common/decorators/require-feature.decorator';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import { Role, CourseStatus } from '@prisma/client';
+import { CreateCourseDto } from './dto/create-course.dto';
+import { CreateRatingDto } from './dto/create-rating.dto';
 
 @Controller('courses')
 export class CoursesController {
@@ -35,10 +37,11 @@ export class CoursesController {
     @Query('limit') limit = '10',
     @Query('search') search?: string,
     @Query('category') category?: string,
+    @Query('sortBy') sortBy?: string,
   ) {
     const tenantId = (req as any).tenantId;
     if (!tenantId) throw new BadRequestException('Tenant context required');
-    return this.coursesService.findAll(tenantId, +page, +limit, search, category);
+    return this.coursesService.findAll(tenantId, +page, +limit, search, category, sortBy);
   }
 
   @UseGuards(RolesGuard)
@@ -66,7 +69,7 @@ export class CoursesController {
     return this.coursesService.getTeacherStats(user.tenantId, user.id);
   }
 
-  // ✅ BE-H02: إضافة FeatureGuard عشان plan-based gating يشتغل فعلاً
+  // BE-H02: added FeatureGuard so plan-based gating actually works
   @RequireFeature('ANALYTICS')
   @UseGuards(FeatureGuard, RolesGuard)
   @Roles(Role.TEACHER, Role.ADMIN)
@@ -110,14 +113,7 @@ export class CoursesController {
   @AuditAction('COURSE_CREATED')
   create(
     @GetUser() user: any,
-    @Body() body: {
-      title: string;
-      description: string;
-      thumbnail?: string;
-      category?: string;
-      price?: number;
-      videoUrl?: string;
-    },
+    @Body() body: CreateCourseDto,
   ) {
     return this.coursesService.create({
       ...body,
@@ -140,6 +136,7 @@ export class CoursesController {
       category?: string;
       price?: number;
       status?: CourseStatus;
+      videoUrl?: string;
     },
   ) {
     return this.coursesService.update(id, user.id, user.role, user.tenantId, body);
@@ -177,5 +174,106 @@ export class CoursesController {
     @GetUser() user: any,
   ) {
     return this.coursesService.delete(id, user.tenantId);
+  }
+  // Lesson Endpoints (T-04)
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Post(':id/lessons')
+  @AuditAction('LESSON_CREATED')
+  createLesson(
+    @Param('id') courseId: string,
+    @GetUser() user: any,
+    @Body() body: {
+      title: string;
+      videoUrl?: string;
+      duration?: number;
+      order?: number;
+      availableAt?: string;
+    },
+  ) {
+    return this.coursesService.createLesson(courseId, user.tenantId, user.id, body);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Get(':id/lessons')
+  getLessons(
+    @Param('id') courseId: string,
+    @GetUser() user: any,
+  ) {
+    return this.coursesService.getLessons(courseId, user.tenantId, user.id);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Patch(':id/lessons/:lessonId')
+  updateLesson(
+    @Param('id') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+    @Body() body: {
+      title?: string;
+      videoUrl?: string;
+      duration?: number;
+      order?: number;
+      availableAt?: string;
+    },
+  ) {
+    return this.coursesService.updateLesson(lessonId, courseId, user.tenantId, user.id, body);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @Delete(':id/lessons/:lessonId')
+  deleteLesson(
+    @Param('id') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+  ) {
+    return this.coursesService.deleteLesson(lessonId, courseId, user.tenantId, user.id);
+  }
+
+  // LESSON-PROGRESS-NEW: يسمح للطالب يحفظ آخر نقطة توقف في الفيديو، عشان
+  // يستأنف منها المرة الجاية. Debounce فعلي بيحصل من الفرونت (مش كل الـ
+  // service call)، فمفيش أي تقييد هنا غير إن الطالب لازم يكون مسجل في
+  // الكورس ده.
+  @UseGuards(RolesGuard)
+  @Roles(Role.STUDENT)
+  @Patch(':id/lessons/:lessonId/progress')
+  saveLessonProgress(
+    @Param('id') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+    @Body() body: { positionSeconds: number },
+  ) {
+    return this.coursesService.saveLessonProgress(
+      lessonId, courseId, user.tenantId, user.id, body.positionSeconds,
+    );
+  }
+
+  // Ratings (Task #6)
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.STUDENT)
+  @Post(':id/ratings')
+  @AuditAction('COURSE_RATED')
+  rateCourse(
+    @Param('id') courseId: string,
+    @GetUser() user: any,
+    @Body() body: CreateRatingDto,
+  ) {
+    return this.coursesService.rateCourse(courseId, user.id, user.tenantId, body);
+  }
+
+  @Public()
+  @Get(':id/ratings')
+  getCourseRatings(
+    @Param('id') courseId: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    if (!tenantId) throw new BadRequestException('Tenant context required');
+    return this.coursesService.getCourseRatings(courseId, tenantId);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Role } from '@prisma/client';
 
@@ -18,6 +18,7 @@ const safeUserSelect = {
   name: true,
   email: true,
   role: true,
+  avatar: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -26,7 +27,7 @@ const safeUserSelect = {
 export class UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Multi-tenant: كل query بتفلتر بـ tenantId
+  // Multi-tenant: ÙƒÙ„ query Ø¨ØªÙÙ„ØªØ± Ø¨Ù€ tenantId
   async findAll(tenantId: string, page: number, limit: number): Promise<{ users: SafeUser[]; total: number }> {
     const skip = (page - 1) * limit;
     const [users, total] = await this.prisma.$transaction([
@@ -53,14 +54,14 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  // Multi-tenant: email unique per tenant — لازم tenantId + email مع بعض
+  // Multi-tenant: email unique per tenant â€” Ù„Ø§Ø²Ù… tenantId + email Ù…Ø¹ Ø¨Ø¹Ø¶
   async findByEmail(tenantId: string, email: string) {
     return this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email } },
     });
   }
 
-  async updateProfile(id: string, data: { name?: string }): Promise<SafeUser> {
+  async updateProfile(id: string, data: { name?: string; avatar?: string }): Promise<SafeUser> {
     return this.prisma.user.update({
       where: { id },
       data,
@@ -87,7 +88,7 @@ export class UsersRepository {
     await this.prisma.user.delete({ where: { id } });
   }
 
-  // Multi-tenant: عد الـ users بـ role داخل الـ tenant
+  // Multi-tenant: Ø¹Ø¯ Ø§Ù„Ù€ users Ø¨Ù€ role Ø¯Ø§Ø®Ù„ Ø§Ù„Ù€ tenant
   async countByRole(tenantId: string, role: Role): Promise<number> {
     return this.prisma.user.count({ where: { tenantId, role } });
   }

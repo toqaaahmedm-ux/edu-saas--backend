@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { CoursesController } from './courses.controller';
 import { CoursesService } from './courses.service';
 import { CoursesRepository } from './courses.repository';
 import { LessonsController } from './lessons.controller';
 import { LessonsService } from './lessons.service';
 import { LessonsRepository } from './lessons.repository';
+import { ModulesRepository } from '../modules/modules.repository';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { BillingModule } from '../billing/billing.module';
 
@@ -14,6 +15,7 @@ import { BillingModule } from '../billing/billing.module';
   providers: [
     CoursesService, CoursesRepository,
     LessonsService, LessonsRepository,
+    ModulesRepository,
   ],
   exports: [CoursesService, CoursesRepository],
 })

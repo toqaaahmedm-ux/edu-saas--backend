@@ -193,13 +193,6 @@ describe('AuthController', () => {
     });
   });
 
-  describe('getMe', () => {
-    it('يرجع req.user مباشرة', async () => {
-      const req = { user: mockUserData } as any;
-      const result = await controller.getMe(req);
-      expect(result).toEqual(mockUserData);
-    });
-  });
 
   describe('loginSuperAdmin', () => {
     it('يسجل دخول superadmin ويحط الكوكيز بدون accessToken في الـ body', async () => {

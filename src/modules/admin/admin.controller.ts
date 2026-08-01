@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -14,8 +14,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
-import { CreateTenantDto } from './dto/create-tenant.dto'; // ✅ BE-H03
-import { UpdateTenantDto } from './dto/update-tenant.dto'; // ✅ BE-H03
+import { CreateTenantDto } from './dto/create-tenant.dto';
+import { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @Controller('admin')
 @UseGuards(RolesGuard)
@@ -26,6 +26,35 @@ export class AdminController {
   @Get('stats')
   getPlatformStats() {
     return this.adminService.getPlatformStats();
+  }
+
+  @Get('analytics')
+  getPlatformAnalytics() {
+    return this.adminService.getPlatformAnalytics();
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('analytics/tenant')
+  getTenantAnalytics(@GetUser() user: any) {
+    return this.adminService.getTenantAnalytics(user.tenantId);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('tenant-analytics')
+  getTenantAnalyticsAlias(@GetUser() user: any) {
+    return this.adminService.getTenantAnalytics(user.tenantId);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('analytics/academic')
+  getAcademicOverview(@GetUser() user: any) {
+    return this.adminService.getAcademicOverview(user.tenantId);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('usage/me')
+  getMyUsage(@GetUser() user: any) {
+    return this.adminService.getTenantUsage(user.tenantId);
   }
 
   @Get('tenants')
@@ -41,15 +70,17 @@ export class AdminController {
     return this.adminService.findTenantById(id);
   }
 
+  @AuditAction('TENANT_CREATED')
   @Post('tenants')
-  createTenant(@Body() dto: CreateTenantDto) { // ✅ DTO بدل body: any
+  createTenant(@Body() dto: CreateTenantDto) {
     return this.adminService.createTenant(dto);
   }
 
+  @AuditAction('TENANT_UPDATED')
   @Patch('tenants/:id')
   updateTenant(
     @Param('id') id: string,
-    @Body() dto: UpdateTenantDto, // ✅ DTO بدل body: any
+    @Body() dto: UpdateTenantDto,
   ) {
     return this.adminService.updateTenant(id, dto);
   }
@@ -61,6 +92,15 @@ export class AdminController {
     @GetUser() user: any,
   ) {
     return this.adminService.suspendTenant(id, user.id);
+  }
+
+  @Patch('tenants/:id/extend-trial')
+  extendTrial(
+    @Param('id') id: string,
+    @Body() body: { days: number },
+    @GetUser() user: any,
+  ) {
+    return this.adminService.extendTrial(id, body.days, user.id);
   }
 
   @AuditAction('PLAN_ASSIGNED')

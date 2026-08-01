@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -28,13 +29,31 @@ async function bootstrap() {
   app.use(cookieParser());
 
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'https://edu-saas-platform.vercel.app',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean),
+    origin: (origin, callback) => {
+      // No origin (e.g. server-to-server, curl, Postman) — allow.
+      if (!origin) return callback(null, true);
+
+      const allowedExact = [
+        'http://localhost:3000',
+        'https://edu-saas-platform.vercel.app',
+        process.env.FRONTEND_URL,
+      ].filter(Boolean);
+
+      // Any tenant subdomain on localhost (e.g. edusaas-academy.localhost:3000)
+      // needs to be allowed too — the frontend calls the backend directly
+      // from these origins on pages that use apiClient instead of the
+      // Next.js proxy routes.
+      const isLocalSubdomain = /^http:\/\/[a-z0-9-]+\.localhost:3000$/.test(origin);
+
+      if (allowedExact.includes(origin) || isLocalSubdomain) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origin ${origin} not allowed by CORS`), false);
+    },
     credentials: true,
   });
+  
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     transform: true,

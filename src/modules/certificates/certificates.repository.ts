@@ -38,6 +38,10 @@ export class CertificatesRepository {
     examName: string;
     institutionName: string;
     facultyName: string;
+    // PDF-FIX: score/letterGrade كانوا موجودين في الـ schema بس مش بيتحفظوا أبدًا.
+    // اتضافوا هنا كـ optional عشان أي كود قديم بينادي create() من غيرهم يفضل شغال بدون تعديل.
+    score?: number;
+    letterGrade?: string;
   }) {
     return this.prisma.certificate.create({
       data: {
@@ -47,6 +51,8 @@ export class CertificatesRepository {
         examName:        data.examName,
         institutionName: data.institutionName,
         facultyName:     data.facultyName,
+        score:           data.score ?? null,
+        letterGrade:     data.letterGrade ?? null,
       },
     });
   }

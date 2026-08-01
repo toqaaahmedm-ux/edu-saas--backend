@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class QuizRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAllWithCourse(tenantId: string) {
+  async findAllWithCourse(tenantId: string, enrolledCourseIds: string[], courseId?: string) {
     return this.prisma.quiz.findMany({
-      where: { course: { tenantId } },
+      where: {
+        tenantId,
+        courseId: courseId ?? { in: enrolledCourseIds },
+      },
       include: {
         course: { select: { id: true, title: true } },
         questions: { select: { id: true } },
@@ -15,24 +18,23 @@ export class QuizRepository {
     });
   }
 
-  async findByIdWithQuestions(quizId: string) {
-    return this.prisma.quiz.findUnique({
-      where: { id: quizId },
+  async findByIdWithQuestions(quizId: string, tenantId: string) {
+    return this.prisma.quiz.findFirst({
+      where: { id: quizId, tenantId },
       include: {
         questions: {
           select: {
             id: true,
             text: true,
             options: true,
-            // correctIndex محذوف — لا يُرسل للعميل أبداً
           },
         },
       },
     });
   }
 
-  async findById(quizId: string) {
-    return this.prisma.quiz.findUnique({ where: { id: quizId } });
+  async findById(quizId: string, tenantId: string) {
+    return this.prisma.quiz.findFirst({ where: { id: quizId, tenantId } });
   }
 
   async findQuestionsByQuizId(quizId: string) {
@@ -52,9 +54,15 @@ export class QuizRepository {
     });
   }
 
-  // FEAT-07: جيب كل المحاولات المكتملة
   async findAllCompletedAttempts(studentId: string, quizId: string) {
     return this.prisma.quizAttempt.findMany({
+      where: { studentId, quizId, submittedAt: { not: null } },
+      orderBy: { submittedAt: 'desc' },
+    });
+  }
+
+  async findLatestCompletedAttempt(studentId: string, quizId: string) {
+    return this.prisma.quizAttempt.findFirst({
       where: { studentId, quizId, submittedAt: { not: null } },
       orderBy: { submittedAt: 'desc' },
     });
@@ -72,10 +80,10 @@ export class QuizRepository {
     });
   }
 
-  async updateAttemptScore(attemptId: string, score: number) {
+  async updateAttemptResult(attemptId: string, score: number, answers: unknown) {
     return this.prisma.quizAttempt.update({
       where: { id: attemptId },
-      data: { score, submittedAt: new Date() },
+      data: { score, submittedAt: new Date(), answers: answers as any },
     });
   }
 }

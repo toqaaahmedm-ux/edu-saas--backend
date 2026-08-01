@@ -1,11 +1,17 @@
 ﻿import {
-  Controller, Post, Get, Body,
-  Req, Res, UnauthorizedException, Headers,
+  Controller, Post, Get, Body, Param,
+  Req, Res, UnauthorizedException, Headers, UseGuards,
 } from '@nestjs/common';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { GetUser } from '../../common/decorators/get-user.decorator';
+import { Role } from '@prisma/client';
 import { ApiHeader, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import type { Request, Response } from 'express';
@@ -28,7 +34,7 @@ const REFRESH_COOKIE_OPTIONS = {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @Public()
   @Post('register')
@@ -48,9 +54,9 @@ export class AuthController {
   @ApiHeader({
     name: 'x-tenant-id',
     required: false,
-    description: 'Tenant UUID — اتركيه فاضي لتسجيل دخول SuperAdmin',
+    description: 'Tenant UUID — required for tenant users (Admin/Teacher/Student). Leave empty only for SuperAdmin login.',
   })
-  @ApiOperation({ summary: 'Login — اتركي x-tenant-id فاضي للـ SuperAdmin' })
+  @ApiOperation({ summary: 'Login — provide x-tenant-id for tenant users; leave empty for SuperAdmin' })
   async login(
     @Body() dto: LoginDto,
     @Headers('x-tenant-id') tenantId: string,
@@ -63,11 +69,11 @@ export class AuthController {
     res.cookie('session-token', result.accessToken, ACCESS_COOKIE_OPTIONS);
     res.cookie('refresh-token', result.refreshToken, REFRESH_COOKIE_OPTIONS);
 
+    // BE-H04 FIX: ما بنرجعش accessToken ولا refreshToken في الـ body —
+    // مكشوفين لـ logging proxies. الاتنين موجودين في httpOnly cookies بس.
     return res.json({
       success: true,
       data: result.data,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     });
   }
 
@@ -90,11 +96,25 @@ export class AuthController {
     res.clearCookie('refresh-token', { path: '/auth/refresh' });
     return res.json({ success: true });
   }
+// Returns the token directly instead of setting a cookie — the caller
+  // (SuperAdmin, on localhost:3000) and the target (tenant subdomain)
+  // are different origins, so a cookie set here would land on the wrong
+  // domain. The frontend carries this token to the tenant's own
+  // subdomain and converts it to a cookie there instead.
+  @UseGuards(RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  @Post('impersonate/:userId')
+  @AuditAction('TENANT_IMPERSONATED')
+  async impersonate(
+    @Param('userId') userId: string,
+    @GetUser('id') superAdminId: string,
+  ) {
+    const result = await this.authService.impersonateTenantAdmin(userId, superAdminId);
+    return { success: true, accessToken: result.accessToken, data: result.data };
+  }
 
-  // ✅ BE-L04: شلنا GET /auth/me من هنا —
-  // المسار الأغنى (بيرجع من DB) موجود في UsersController على GET /me
-  // اللي بيستدعي usersService.findById(id) بدل req.user من الـ cache بس
-
+  // BE-L04: GET /auth/me متشالة من هنا — المسار الأغنى (بيرجع من DB)
+  // موجود في UsersController على GET /me
   @Public()
   @Post('superadmin/login')
   @AuditAction('SUPERADMIN_LOGIN')
@@ -108,8 +128,21 @@ export class AuthController {
     return res.json({
       success: true,
       data: result.data,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     });
+  }
+
+  // Email infrastructure fix: password reset flow didn't exist at all.
+  @Public()
+  @Post('forgot-password')
+  @AuditAction('PASSWORD_RESET_REQUESTED')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @AuditAction('PASSWORD_RESET_COMPLETED')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 }

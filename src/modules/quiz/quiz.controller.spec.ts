@@ -63,14 +63,15 @@ describe('QuizController', () => {
   describe('getQuiz', () => {
     it('يرجع الكويز مع الأسئلة', async () => {
       service.getQuizWithQuestions.mockResolvedValue(mockQuiz);
-      const result = await controller.getQuiz('quiz-123');
+      const result = await controller.getQuiz('quiz-123', mockUser);
       expect(result).toEqual(mockQuiz);
-      expect(service.getQuizWithQuestions).toHaveBeenCalledWith('quiz-123');
+      // ✅ بنتأكد إن tenantId اتبعت كمان (multi-tenant isolation fix)
+      expect(service.getQuizWithQuestions).toHaveBeenCalledWith('quiz-123', mockUser.tenantId);
     });
 
     it('يرمي NotFoundException لو الكويز مش موجود', async () => {
       service.getQuizWithQuestions.mockRejectedValue(new NotFoundException('Quiz not found'));
-      await expect(controller.getQuiz('wrong-id')).rejects.toThrow(NotFoundException);
+      await expect(controller.getQuiz('wrong-id', mockUser)).rejects.toThrow(NotFoundException);
     });
   });
 

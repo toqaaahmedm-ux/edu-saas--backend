@@ -17,8 +17,21 @@ import { SessionAuthGuard } from './common/guards/session-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
-
+import { MailModule } from './modules/mail/mail.module';
+// NEW: Sprint 1 academic structure — course modules/chapters and
+// assignments+submissions, added on top of the existing Courses feature.
+import { ModulesModule } from './modules/modules/modules.module';
+import { AssignmentsModule } from './modules/assignments/assignments.module';
+// NEW: attendance roll-call and computed final grades
+import { AttendanceModule } from './modules/attendance/attendance.module';
+import { GradesModule } from './modules/grades/grades.module';
+// NEW: admin-managed academic structure lookups (years, semesters, grade levels, sections)
+import { AcademicModule } from './modules/academic/academic.module';
+import { TenantsModule } from './modules/tenants/tenants.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 @Module({
+  controllers: [AppController],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
@@ -44,6 +57,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
         CLOUDINARY_CLOUD_NAME: Joi.string().required(),
         CLOUDINARY_API_KEY: Joi.string().required(),
         CLOUDINARY_API_SECRET: Joi.string().required(),
+        RESEND_API_KEY: Joi.string().required(),
       }),
       validationOptions: {
         // نجمع كل الأخطاء مرة واحدة بدل ما نوقف عند أول واحد بس —
@@ -66,8 +80,19 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     CertificatesModule,
     UploadModule,
     NotificationsModule,
+    MailModule,
+    // NEW: registered after CoursesModule since both depend on it
+    // (they inject CoursesService to check course ownership before
+    // letting a teacher create/edit modules or assignments)
+    ModulesModule,
+    AssignmentsModule,
+    AttendanceModule,
+    GradesModule,
+    AcademicModule,
+    TenantsModule,
   ],
   providers: [
+    AppService,
     {
       provide: APP_GUARD,
       useClass: SessionAuthGuard,
