@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { LessonsRepository } from './lessons.repository';
 import { CoursesRepository } from '../courses/courses.repository';
 import { ModulesRepository } from '../modules/modules.repository';
@@ -34,10 +34,6 @@ export class LessonsService {
     return this.lessonsRepository.findAvailableByCourseId(courseId, tenantId);
   }
 
-  // Sprint 2 bugfix: moduleId is now required — lessons created without one
-  // were "orphaned" (existed in the DB, invisible to students, since the
-  // student-facing GET /courses/:id/modules only ever returns lessons that
-  // are actually attached to a module).
   async create(courseId: string, userId: string, userRole: string, tenantId: string, data: {
     title: string;
     videoUrl?: string;
@@ -134,14 +130,6 @@ export class LessonsService {
     const completedCount = await this.lessonsRepository.countCompletedByCourse(studentId, lesson.courseId, tenantId);
     const progress = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
-    // Sprint 2 bugfix: status must be reconciled in BOTH directions here,
-    // not just forward to COMPLETED. Without this, a course whose status
-    // was already COMPLETED (e.g. from a passing quiz attempt) stayed
-    // "Completed" forever even after progress dropped back down to a
-    // real, lesson-based percentage below 100 — exactly what showed up
-    // as a course sitting at 20% progress under the "Completed" tab.
-    // SUSPENDED is left untouched since that's an admin/teacher action,
-    // not something lesson completion should override.
     const newStatus =
       progress >= 100 ? 'COMPLETED' : enrollment.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
 
@@ -161,5 +149,26 @@ export class LessonsService {
       progress: updatedEnrollment.progress,
       courseCompleted: updatedEnrollment.progress >= 100,
     };
+  }
+
+  // --- video progress (resume-where-you-left-off) ---
+
+  async saveProgress(lessonId: string, studentId: string, tenantId: string, positionSeconds: number) {
+    const lesson = await this.lessonsRepository.findById(lessonId, tenantId);
+    if (!lesson) throw new NotFoundException('Lesson not found');
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: lesson.courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in this course to save progress');
+    }
+
+    return this.lessonsRepository.upsertProgress(tenantId, studentId, lessonId, positionSeconds);
+  }
+
+  async getProgress(lessonId: string, studentId: string, tenantId: string) {
+    const progress = await this.lessonsRepository.findProgress(studentId, lessonId);
+    return { positionSeconds: progress?.positionSeconds ?? 0 };
   }
 }

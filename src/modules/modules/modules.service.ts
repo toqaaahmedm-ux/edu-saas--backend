@@ -33,13 +33,18 @@ export class ModulesService {
   // completion state. If the caller isn't a student with an enrollment
   // (e.g. teacher/admin, or an anonymous @Public() request), lessons are
   // returned with isCompleted: false and no error is thrown.
+  //
+  // LESSON-PROGRESS-NEW: also enrich each lesson with `savedPosition`
+  // (seconds), read from LessonProgress, so the frontend video player can
+  // seek to where the student left off. Defaults to 0 (start) when there
+  // is no student, or no saved progress yet for that lesson.
   async findAllByCourse(courseId: string, tenantId: string, studentId?: string) {
     const modules = await this.modulesRepository.findAllByCourse(courseId, tenantId);
 
     if (!studentId) {
       return modules.map((m) => ({
         ...m,
-        lessons: m.lessons.map((l: any) => ({ ...l, isCompleted: false })),
+        lessons: m.lessons.map((l: any) => ({ ...l, isCompleted: false, savedPosition: 0 })),
       }));
     }
 
@@ -49,11 +54,19 @@ export class ModulesService {
     });
     const completedIds = new Set(completed.map((c) => c.lessonId));
 
+    // LESSON-PROGRESS-NEW
+    const progressRecords = await this.prisma.lessonProgress.findMany({
+      where: { studentId, tenantId, lesson: { courseId } },
+      select: { lessonId: true, positionSeconds: true },
+    });
+    const progressByLessonId = new Map(progressRecords.map((p) => [p.lessonId, p.positionSeconds]));
+
     return modules.map((m) => ({
       ...m,
       lessons: m.lessons.map((l: any) => ({
         ...l,
         isCompleted: completedIds.has(l.id),
+        savedPosition: progressByLessonId.get(l.id) ?? 0,
       })),
     }));
   }

@@ -67,7 +67,7 @@ export class CoursesService {
     if (data.price !== undefined && data.price < 0) throw new BadRequestException('Price cannot be negative');
 
     // Plan limits enforcement: mirrors the maxStudents check already done
-    // in EnrollmentsService â€” same transaction pattern to avoid a race
+    // in EnrollmentsService — same transaction pattern to avoid a race
     // condition where two concurrent requests both pass the count check
     // before either course is actually created.
     const subscription = await this.billingService.getTenantSubscription(data.tenantId);
@@ -165,7 +165,7 @@ export class CoursesService {
       where: { courseId: { in: courseIds } },
     });
 
-    // T-07 FIX: avgRating replaced with completionRate â€” there's no Rating
+    // T-07 FIX: avgRating replaced with completionRate — there's no Rating
     // model in the DB so avgRating always returned 0 and was misleading.
     // completionRate is calculated from real enrollment data we already have.
     const completedEnrollments = await this.prisma.enrollment.count({
@@ -249,7 +249,7 @@ export class CoursesService {
     const totalRevenue = await this.coursesRepository.sumRevenue(tenantId);
     return { totalCourses, totalStudents, totalRevenue };
   }
-  // â”€â”€â”€ Lesson Methods (T-04) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Lesson Methods (T-04) ─────────────────────────────────────────
 
   async createLesson(
     courseId: string,
@@ -345,6 +345,53 @@ export class CoursesService {
     await this.prisma.lesson.delete({ where: { id: lessonId } });
     return { message: 'Lesson deleted successfully' };
   }
+
+  // LESSON-PROGRESS-NEW: بيحفظ آخر نقطة توقف في الفيديو لطالب معين. بيعمل
+  // upsert على LessonProgress (فريد بـ studentId+lessonId زي ما في الـ
+  // schema)، بعد ما يتأكد إن الطالب فعلاً مسجل في الكورس ده وإن الدرس
+  // فعلاً تابع لنفس الكورس والمستأجر (منع تلاعب بمعرف درس من كورس تاني).
+  async saveLessonProgress(
+    lessonId: string,
+    courseId: string,
+    tenantId: string,
+    studentId: string,
+    positionSeconds: number,
+  ) {
+    if (typeof positionSeconds !== 'number' || positionSeconds < 0 || !Number.isFinite(positionSeconds)) {
+      throw new BadRequestException('positionSeconds must be a non-negative number');
+    }
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId } },
+    });
+    if (!enrollment) {
+      throw new ForbiddenException('You must be enrolled in this course to save progress');
+    }
+
+    const lesson = await this.prisma.lesson.findFirst({
+      where: { id: lessonId, courseId, tenantId },
+      select: { id: true },
+    });
+    if (!lesson) {
+      throw new NotFoundException('Lesson not found in this course');
+    }
+
+    const rounded = Math.floor(positionSeconds);
+
+    return this.prisma.lessonProgress.upsert({
+      where: { studentId_lessonId: { studentId, lessonId } },
+      create: {
+        tenantId,
+        studentId,
+        lessonId,
+        positionSeconds: rounded,
+      },
+      update: {
+        positionSeconds: rounded,
+      },
+    });
+  }
+
   // ─── Ratings (Task #6) ──────────────────────────────────────────────
 
   async rateCourse(

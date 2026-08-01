@@ -234,6 +234,24 @@ export class CoursesController {
     return this.coursesService.deleteLesson(lessonId, courseId, user.tenantId, user.id);
   }
 
+  // LESSON-PROGRESS-NEW: يسمح للطالب يحفظ آخر نقطة توقف في الفيديو، عشان
+  // يستأنف منها المرة الجاية. Debounce فعلي بيحصل من الفرونت (مش كل الـ
+  // service call)، فمفيش أي تقييد هنا غير إن الطالب لازم يكون مسجل في
+  // الكورس ده.
+  @UseGuards(RolesGuard)
+  @Roles(Role.STUDENT)
+  @Patch(':id/lessons/:lessonId/progress')
+  saveLessonProgress(
+    @Param('id') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+    @Body() body: { positionSeconds: number },
+  ) {
+    return this.coursesService.saveLessonProgress(
+      lessonId, courseId, user.tenantId, user.id, body.positionSeconds,
+    );
+  }
+
   // Ratings (Task #6)
 
   @UseGuards(RolesGuard)
