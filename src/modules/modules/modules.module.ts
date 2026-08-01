@@ -6,7 +6,7 @@ import { CoursesModule } from '../courses/courses.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule, CoursesModule], // عشان نستخدم CoursesService في فحص الملكية
+  // so we can use CoursesService for the ownership check
   controllers: [ModulesController],
   providers: [ModulesService, ModulesRepository],
   exports: [ModulesService],

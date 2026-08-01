@@ -15,7 +15,7 @@ export class SessionAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
     if (isPublic) return true;
-    //  تفويض لـ Passport JWT strategy
+    // delegates to the Passport JWT strategy
     return super.canActivate(context);
   }
 }

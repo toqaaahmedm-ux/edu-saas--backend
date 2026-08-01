@@ -346,10 +346,10 @@ export class CoursesService {
     return { message: 'Lesson deleted successfully' };
   }
 
-  // LESSON-PROGRESS-NEW: بيحفظ آخر نقطة توقف في الفيديو لطالب معين. بيعمل
-  // upsert على LessonProgress (فريد بـ studentId+lessonId زي ما في الـ
-  // schema)، بعد ما يتأكد إن الطالب فعلاً مسجل في الكورس ده وإن الدرس
-  // فعلاً تابع لنفس الكورس والمستأجر (منع تلاعب بمعرف درس من كورس تاني).
+  // LESSON-PROGRESS-NEW: saves the last stop point in the video for a given student. Does an
+  // upsert on LessonProgress (unique by studentId+lessonId as in the
+  // schema), after confirming the student is actually enrolled in this course and that the lesson
+  // actually belongs to the same course and tenant (prevents tampering with a lesson ID from another course).
   async saveLessonProgress(
     lessonId: string,
     courseId: string,

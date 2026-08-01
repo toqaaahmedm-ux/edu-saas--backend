@@ -30,15 +30,15 @@ const mockNotificationsService = {
   createNotification: jest.fn().mockResolvedValue({}),
 };
 
-// FEAT-04: mock BillingService — بيرجع null عشان مفيش subscription في الـ test
+// FEAT-04: mock BillingService — returns null since there's no subscription in the test
 const mockBillingService = {
   getTenantSubscription: jest.fn().mockResolvedValue(null),
 };
 
-// ملحوظة CRIT-11: الكود الحقيقي بقى بيستخدم this.prisma.$transaction(async (tx) => {...})
-// عشان يحل race condition على حد الطلاب. فـ $transaction هنا لازم تكون
-// function بتاخد callback وتنده عليه، وتمرر له "tx" — وهو نفسه object
-// فيه enrollment.count و enrollment.create بالظبط زي عميل Prisma العادي.
+// note on CRIT-11: the real code now uses this.prisma.$transaction(async (tx) => {...})
+// to fix a race condition on the student count. So $transaction here needs to be a
+// function that takes a callback and calls it, passing it "tx" — which is itself an object
+// with enrollment.count and enrollment.create, exactly like a normal Prisma client.
 const mockTx = {
   enrollment: {
     count: jest.fn().mockResolvedValue(0),
@@ -87,7 +87,7 @@ describe('EnrollmentsService', () => {
     service = module.get<EnrollmentsService>(EnrollmentsService);
     jest.clearAllMocks();
 
-    // reset defaults بعد clearAllMocks
+    // reset defaults after clearAllMocks
     mockBillingService.getTenantSubscription.mockResolvedValue(null);
     mockPrismaService.enrollment.count.mockResolvedValue(0);
     mockPrismaService.$transaction.mockImplementation((callback) => callback(mockTx));

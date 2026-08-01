@@ -43,9 +43,9 @@ export class CertificatesController {
     });
   }
 
-  // PDF-NEW: تنزيل الشهادة كـ PDF حقيقي مولّد من السيرفر عبر Puppeteer،
-  // بدل الاعتماد على window.print() في المتصفح. نفس الـ Guard المستخدم
-  // في findOne بالظبط، فمفيش أي تغيير في مستوى الحماية.
+  // PDF-NEW: download the certificate as a real PDF generated server-side via Puppeteer,
+  // instead of relying on window.print() in the browser. Uses the exact same Guard as
+  // in findOne, so there's no change in the protection level.
   @UseGuards(SessionAuthGuard)
   @Get(':id/pdf')
   @AuditAction('CERTIFICATE_ACCESSED')
@@ -71,11 +71,11 @@ export class CertificatesController {
     res.end(pdfBuffer);
   }
 
-  // BE-C05 FIX: كان مفتوح بدون أي Guard خالص — أي حد (حتى من غير تسجيل
-  // دخول) يقدر يشوف بيانات شخصية لطالب تاني بمعرفة الـ UUID بس. دلوقتي
-  // محمي بـ SessionAuthGuard (لازم تسجيل دخول)، وبنبعت tenantId + user
-  // للـ service عشان يتحقق إن الشهادة تبع نفس المستأجر وإن صاحب الطلب
-  // هو الطالب نفسه أو ADMIN/TEACHER.
+  // BE-C05 FIX: this used to be wide open with no Guard at all — anyone (even without
+  // being logged in) could view another student's personal data just by knowing the UUID. Now it's
+  // protected by SessionAuthGuard (must be logged in), and we pass tenantId + user
+  // to the service to verify the certificate belongs to the same tenant and that the requester
+  // is either the student themselves or ADMIN/TEACHER.
   @UseGuards(SessionAuthGuard)
   @Get(':id')
   @AuditAction('CERTIFICATE_ACCESSED')

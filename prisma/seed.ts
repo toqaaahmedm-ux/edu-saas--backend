@@ -275,7 +275,7 @@ async function main() {
 
   console.log("📚 Created 3 courses across 2 tenants");
 
-  // ─── 11. Lessons (مع tenantId) ────────────────────────────────
+  // ─── 11. Lessons (with tenantId) ────────────────────────────────
   await prisma.lesson.createMany({
     data: [
       { title: "ما هو JavaScript؟",   videoUrl: "https://example.com/v/1",  duration: 600,  order: 1, courseId: course1.id, tenantId: tenant1.id },

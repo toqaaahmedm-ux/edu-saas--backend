@@ -1,0 +1,547 @@
+[
+  {
+    "file": "can-arabic-comments.js",
+    "line": 9,
+    "comment": "// submission state machine: draft Ã¢â€ â€™ submitted Ã¢â€ â€™ graded (or returned for revision)\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 22,
+    "comment": "// ─── 11. Lessons (مع tenantId) ────────────────────────────────\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 35,
+    "comment": "// SEC-05 FIX: لو أي متغير حرج فاضي أو ناقص، التطبيق يوقف عن الإقلاع\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 36,
+    "comment": "// فوراً بدل ما يشتغل بقيمة \"undefined\" كـ string — السيناريو ده كان\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 37,
+    "comment": "// بيخلي JWT_SECRET يبقى string ثابت ومعروف وأي حد عارف ده يقدر يوقّع JWT صالح بنفسه.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 48,
+    "comment": "// نجمع كل الأخطاء مرة واحدة بدل ما نوقف عند أول واحد بس —\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 49,
+    "comment": "// أسهل في الإصلاح لو أكتر من متغير ناقص\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 59,
+    "comment": "// BE-C06 FIX: AuditInterceptor كانت معرَّفة كاملة ومعاها decorator\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 60,
+    "comment": "// @AuditAction مستخدم فعلاً في admin.controller.ts (TENANT_SUSPENDED,\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 61,
+    "comment": "// PLAN_ASSIGNED) — لكن مفيش تسجيل خالص في الـ pipeline، فمفيش audit\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 62,
+    "comment": "// log واحد بيتكتب فعلياً. الـ interceptor عنده dependencies\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 63,
+    "comment": "// (PrismaService, Reflector)، فلازم يتسجل كـ APP_INTERCEPTOR provider\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 64,
+    "comment": "// هنا (مش new AuditInterceptor() في main.ts) عشان NestJS يحقن\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 65,
+    "comment": "// الـ dependencies بتاعته صح.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 84,
+    "comment": "// ── NEW-07: إيرادات حقيقية من DB ──\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 93,
+    "comment": "// ← حقيقي من DB\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 94,
+    "comment": "// ← عدد الطلاب النشطين\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 108,
+    "comment": "// @GetTenant() decorator — يجيب الـ tenantId من الـ request\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 121,
+    "comment": "// // FeatureGuard هنضيفه بعدين لما نحل الـ circular dependency\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 134,
+    "comment": "// ← بيمسك كل الـ exceptions مش بس HttpException\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 143,
+    "comment": "// لو مش في production — ابعت الـ message الحقيقي للـ debug\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 151,
+    "comment": "// لوج الـ error في السيرفر\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 164,
+    "comment": "//  تفويض لـ Passport JWT strategy\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 178,
+    "comment": "// Decorator لتحديد الـ action\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 187,
+    "comment": "// لو مفيش action محدد — مش نسجل\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 196,
+    "comment": "// للأدمن العادي: tenantId بتاعه هو نفسه. للـ SUPER_ADMIN بيعمل createTenant\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 197,
+    "comment": "// لتينانت جديد، مفيش tenantId على المستخدم نفسه، فبنستخدم الـ target كـ tenantId\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 198,
+    "comment": "// في الحالة دي لأنه هو نفسه الـ tenant اللي اتعمل له الإجراء.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 213,
+    "comment": "// ✅ BE-L02: شيل الـ query params من الـ log عشان متتسجلش PII\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 226,
+    "comment": "// Prisma transaction بيبعت (tx) بنفس شكل الـ prisma client — بنموكه بنفس الشكل\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 235,
+    "comment": "// subdomain مش مكرر\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 236,
+    "comment": "// owner email مش مكرر\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 246,
+    "comment": "// اتشفرت الباسورد قبل ما تتخزن\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 250,
+    "comment": "// الـ tenant اتعمل بحالة TRIAL ومعاه trialEndsAt\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 259,
+    "comment": "// الـ owner اتعمل بدور ADMIN ومربوط بالـ tenant الصح\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 268,
+    "comment": "// الـ tenant اتحدّث بـ ownerUserId بعد إنشاء الـ owner\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 281,
+    "comment": "// عشان نستخدم CoursesService في فحص الملكية + GradesService لإعادة الحساب التلقائي\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 294,
+    "comment": "// tenantId مباشر في WHERE، نفس منطق BE-C03 fix في courses\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 303,
+    "comment": "// upsert عشان الطالب يقدر يعدّل تسليمه قبل الـ dueDate (resubmit) —\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 304,
+    "comment": "// الـ unique constraint [assignmentId, studentId] هو اللي بيمنع تكرار الصف\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 318,
+    "comment": "// ملحوظة: الملف ده بيتست AuthController نفسه (الـ HTTP layer) —\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 319,
+    "comment": "// مش AuthService. الـ AuthService متغطية بالفعل في auth.service.spec.ts.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 320,
+    "comment": "// هنا بنتأكد إن الـ controller بيقرا الـ tenant header صح، بيحط الكوكيز\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 321,
+    "comment": "// (access + refresh) صح، وما بيرجعش accessToken في الـ body (BE-H04)،\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 322,
+    "comment": "// وإن refresh بيقرا refresh-token من الكوكي (BE-C01).\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 335,
+    "comment": "// mock بسيط لـ express Response — بنحتاج بس .cookie() و .clearCookie() و .json()\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 344,
+    "comment": "// ✅ جديد — كوكي الـ refresh-token المنفصلة بـ path محدد (BE-C01)\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 353,
+    "comment": "// BE-H04 FIX: accessToken كان بيتبعت في الـ body — مكشوف لـ logging\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 354,
+    "comment": "// proxies. دلوقتي الـ body فيه بس success و data، مفيش accessToken خالص.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 364,
+    "comment": "// BE-C01 FIX: refresh بقى بيقرا refresh-token من الكوكي (مش من\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 365,
+    "comment": "// req.user اللي كان جاي من JwtStrategy بعد ما يتأكد من التوكن\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 366,
+    "comment": "// القديم) — ده بيسمح بتحديث access token من غير ما الـ access\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 367,
+    "comment": "// القديم يكون لسه صالح.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 379,
+    "comment": "// ✅ جديد — لازم يمسح refresh-token كمان بنفس الـ path\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 392,
+    "comment": "// BE-H04 FIX: ما بنرجعش accessToken ولا refreshToken في الـ body —\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 393,
+    "comment": "// مكشوفين لـ logging proxies. الاتنين موجودين في httpOnly cookies بس.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 403,
+    "comment": "// BE-L04: GET /auth/me متشالة من هنا — المسار الأغنى (بيرجع من DB)\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 404,
+    "comment": "// موجود في UsersController على GET /me\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 418,
+    "comment": "// HIGH-13 FIX: bcryptjs بيستخدم ES Module، فـ jest.spyOn مش قادر يعيد تعريف\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 419,
+    "comment": "// الـ property وبيرمي \"Cannot redefine property: compare\". الحل هو mock\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 420,
+    "comment": "// للـ module كاملاً على مستوى الـ file قبل أي import تاني.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 431,
+    "comment": "// ✅ جديد — AuthService بقت تستخدم ConfigService لقراءة JWT_REFRESH_SECRET\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 432,
+    "comment": "// و JWT_REFRESH_EXPIRES_IN بدل ما تكون hardcoded (BE-C01)\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 442,
+    "comment": "// إعادة تعيين الـ default values بعد clearAllMocks\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 446,
+    "comment": "// ✅ signToken و signRefreshToken بيستخدموا sign بس بـ secrets مختلفة،\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 447,
+    "comment": "// فبنرجع توكنين مختلفين حسب الترتيب اللي بيتنادى بيهم في الكود:\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 448,
+    "comment": "// signToken (access) بيتنادى أولاً، وبعدين signRefreshToken (refresh).\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 459,
+    "comment": "// ✅ جديد\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 468,
+    "comment": "// ✅ جديد — signRefreshToken لازم تستخدم JWT_REFRESH_SECRET من ConfigService\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 469,
+    "comment": "// مش الـ secret الأساسي بتاع access token (BE-C01)\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 479,
+    "comment": "// ✅ جديد\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 488,
+    "comment": "// ── refreshAccessToken (جديد بالكامل — BE-C01) ───────────────────────────\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 495,
+    "comment": "// الميثود دي بتنده على signToken بس (مفيش refresh token جديد)،\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 496,
+    "comment": "// فبنحدد قيمة العودة بشكل صريح بدل الاعتماد على ترتيب\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 497,
+    "comment": "// mockReturnValueOnce الموروث من beforeEach.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 512,
+    "comment": "// PERF-18 FIX: قبل كده validate() كانت بتعمل prisma.user.findUnique() على\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 513,
+    "comment": "// كل request موثّق — ده معناه استعلام DB إضافي على كل API call حتى لو\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 514,
+    "comment": "// الـ JWT نفسه stateless وموقّع ومش محتاج تحقق. مع 1000 request/second\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 515,
+    "comment": "// ده 1000 استعلام DB زيادة في الثانية من غير أي فايدة.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 521,
+    "comment": "// الحل: نرجع بيانات الـ payload مباشرة بعد ما passport يتحقق من التوقيع —\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 522,
+    "comment": "// الـ payload موثوق لأنه موقّع بالـ JWT_SECRET ومش منتهي الصلاحية\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 523,
+    "comment": "// (passport بيتحقق من ده تلقائياً بسبب ignoreExpiration: false).\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 528,
+    "comment": "// ملاحظة: لو محتاجة تتأكد إن الـ user لسه موجود في الداتابيز (مثلاً بعد\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 529,
+    "comment": "// حذف الحساب)، ممكن تضيفي DB lookup هنا — لكن اعرفي إن ده بيكسر الـ\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 530,
+    "comment": "// stateless design وبيضيف latency. البديل الأفضل هو token revocation list\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 531,
+    "comment": "// في Redis لو الأمر ده مهم عندك.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 540,
+    "comment": "// يقرأ من httpOnly cookie أولاً، لو مش موجود يجرب Bearer header\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 549,
+    "comment": "// passport اتحقق من التوقيع والـ expiry قبل ما يوصل هنا —\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 550,
+    "comment": "// بنرجع الـ payload مباشرة وده بيبقى req.user\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 564,
+    "comment": "// FIX #22: QUARTERLY غير مدعوم في Stripe — ارفض الطلب بدل silent wrong billing\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 573,
+    "comment": "// FIX #23: تحديث status الـ tenant لـ ACTIVE تلقائياً بعد الدفع فقط —\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 574,
+    "comment": "// مش جزء من assignPlanToTenant لأن تغيير الخطة يدويًا من الأدمن\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 575,
+    "comment": "// مش لازم يفعّل الـ tenant تلقائيًا\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 586,
+    "comment": "// FIX #23: تأكد إن الـ tenant ACTIVE عند كل دفعة ناجحة\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 599,
+    "comment": "// ✅ BE-M04: جيب الـ IDs الأول بدل ما نعمل N updates\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 608,
+    "comment": "// ✅ BE-M04: updateMany بدل حلقة for\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 615,
+    "comment": "// ✅ BE-M04: createMany بدل حلقة for\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 624,
+    "comment": "// ✅ BE-M04: جيب الـ IDs الأول\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 633,
+    "comment": "// ✅ BE-M04: updateMany للـ subscriptions\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 640,
+    "comment": "// ✅ BE-M04: updateMany للـ tenants\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 647,
+    "comment": "// ✅ BE-M04: createMany للـ audit logs\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 660,
+    "comment": "// Mock الـ guards مباشرة بدون ما نحتاج dependencies بتاعتهم\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 669,
+    "comment": "// BE-C05: findOne بقت تتطلب user (من SessionAuthGuard) وتبعته\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 670,
+    "comment": "// للـ service عشان يتحقق من الملكية. الطالب نفسه يقدر يشوف شهادته.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 680,
+    "comment": "// BE-C05: لو الشهادة تبع مستأجر تاني، الـ service يرمي NotFoundException\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 681,
+    "comment": "// (مش ForbiddenException) عشان منكشفش معلومة وجودها عند مستأجر تاني.\u001b[m"
+  },
+  {
+    "file": "can-arabic-comments.js",
+    "line": 690,
+    "comment": "// BE-C05: طال"
+  },
+  {
+    "file": "fix-mojibake-remaining.js",
+    "line": 2,
+    "comment": "/**\n * fix-mojibake-remaining.js\n *\n * Repairs a leftover mojibake em-dash (\"—\" that got corrupted into\n * something like \"â€\"\") on specific lines of users.service.ts.\n * It recovers the original character automatically (by reinterpreting\n * the corrupted bytes as UTF-8), so there's no risk of typos — this is\n * safer than retyping the dash by hand.\n *\n * Usage (run from EduSaas-backend root):\n *   node fix-mojibake-remaining.js --dry-run\n *   node fix-mojibake-remaining.js\n */"
+  },
+  {
+    "file": "scan-arabic-comments.js",
+    "line": 11,
+    "comment": "//   - common mojibake patterns (broken UTF-8 shown as Ã.../â€.../Ø...)"
+  }
+]

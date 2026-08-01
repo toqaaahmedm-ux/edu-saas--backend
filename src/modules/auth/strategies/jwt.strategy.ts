@@ -4,24 +4,24 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { JwtPayload } from '../auth.service';
 
-// PERF-18 FIX: قبل كده validate() كانت بتعمل prisma.user.findUnique() على
-// كل request موثّق — ده معناه استعلام DB إضافي على كل API call حتى لو
-// الـ JWT نفسه stateless وموقّع ومش محتاج تحقق. مع 1000 request/second
-// ده 1000 استعلام DB زيادة في الثانية من غير أي فايدة.
+// PERF-18 FIX: before this, validate() was running prisma.user.findUnique() on
+// every authenticated request — meaning an extra DB query on every API call, even though
+// the JWT itself is stateless, signed, and doesn't need verification. At 1000 requests/second
+// that's 1000 extra DB queries per second for no benefit.
 //
-// الحل: نرجع بيانات الـ payload مباشرة بعد ما passport يتحقق من التوقيع —
-// الـ payload موثوق لأنه موقّع بالـ JWT_SECRET ومش منتهي الصلاحية
-// (passport بيتحقق من ده تلقائياً بسبب ignoreExpiration: false).
+// The fix: return the payload data directly after passport verifies the signature —
+// the payload is trustworthy since it's signed with JWT_SECRET and isn't expired
+// (passport checks this automatically because of ignoreExpiration: false).
 //
-// ملاحظة: لو محتاجة تتأكد إن الـ user لسه موجود في الداتابيز (مثلاً بعد
-// حذف الحساب)، ممكن تضيفي DB lookup هنا — لكن اعرفي إن ده بيكسر الـ
-// stateless design وبيضيف latency. البديل الأفضل هو token revocation list
-// في Redis لو الأمر ده مهم عندك.
+// Note: if you need to make sure the user still exists in the database (e.g. after
+// account deletion), you could add a DB lookup here — but keep in mind this breaks the
+// stateless design and adds latency. A better alternative is a token revocation list
+// in Redis if this matters for your case.
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
     super({
-      // يقرأ من httpOnly cookie أولاً، لو مش موجود يجرب Bearer header
+      // reads from the httpOnly cookie first, falls back to the Bearer header if not present
       jwtFromRequest: ExtractJwt.fromExtractors([
         (req: Request) => req?.cookies?.['session-token'] ?? null,
         ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -32,8 +32,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload) {
-    // passport اتحقق من التوقيع والـ expiry قبل ما يوصل هنا —
-    // بنرجع الـ payload مباشرة وده بيبقى req.user
+    // passport already verified the signature and expiry before reaching here —
+    // we return the payload directly and it becomes req.user
     return {
       id:       payload.sub,
       email:    payload.email,

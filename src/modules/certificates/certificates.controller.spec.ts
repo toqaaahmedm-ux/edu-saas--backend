@@ -12,7 +12,7 @@ const mockCertificatesService = {
   findById: jest.fn(),
 };
 
-// Mock الـ guards مباشرة بدون ما نحتاج dependencies بتاعتهم
+// mock the guards directly without needing their dependencies
 const mockSessionAuthGuard = { canActivate: jest.fn(() => true) };
 const mockRolesGuard       = { canActivate: jest.fn(() => true) };
 
@@ -119,8 +119,8 @@ describe('CertificatesController', () => {
   });
 
   describe('findOne', () => {
-    // BE-C05: findOne بقت تتطلب user (من SessionAuthGuard) وتبعته
-    // للـ service عشان يتحقق من الملكية. الطالب نفسه يقدر يشوف شهادته.
+    // BE-C05: findOne now requires a user (from SessionAuthGuard) and passes it
+    // to the service to verify ownership. The student themselves can view their own certificate.
     it('يرجع الشهادة لو الطالب صاحبها', async () => {
       service.findById.mockResolvedValue(mockCertificate);
       const result = await controller.findOne('cert-123', mockStudent);
@@ -144,15 +144,15 @@ describe('CertificatesController', () => {
       await expect(controller.findOne('wrong-id', mockStudent)).rejects.toThrow(NotFoundException);
     });
 
-    // BE-C05: لو الشهادة تبع مستأجر تاني، الـ service يرمي NotFoundException
-    // (مش ForbiddenException) عشان منكشفش معلومة وجودها عند مستأجر تاني.
+    // BE-C05: if the certificate belongs to a different tenant, the service throws NotFoundException
+    // (not ForbiddenException) so we don't leak that it exists for another tenant.
     it('يرمي NotFoundException لو الشهادة تبع مستأجر تاني', async () => {
       service.findById.mockRejectedValue(new NotFoundException('Certificate not found'));
       const otherTenantStudent = { id: 'student-999', tenantId: 'other-tenant', role: 'STUDENT' };
       await expect(controller.findOne('cert-123', otherTenantStudent)).rejects.toThrow(NotFoundException);
     });
 
-    // BE-C05: طالب تاني (مش صاحب الشهادة) في نفس المستأجر، ومش admin/teacher.
+    // BE-C05: a different student (not the certificate owner) in the same tenant, and not admin/teacher.
     it('يرمي ForbiddenException لو طالب تاني مش صاحب الشهادة', async () => {
       service.findById.mockRejectedValue(new ForbiddenException('You do not have access to this certificate'));
       const otherStudent = { id: 'other-student', tenantId: 'tenant-123', role: 'STUDENT' };

@@ -234,10 +234,10 @@ export class CoursesController {
     return this.coursesService.deleteLesson(lessonId, courseId, user.tenantId, user.id);
   }
 
-  // LESSON-PROGRESS-NEW: يسمح للطالب يحفظ آخر نقطة توقف في الفيديو، عشان
-  // يستأنف منها المرة الجاية. Debounce فعلي بيحصل من الفرونت (مش كل الـ
-  // service call)، فمفيش أي تقييد هنا غير إن الطالب لازم يكون مسجل في
-  // الكورس ده.
+  // LESSON-PROGRESS-NEW: lets the student save the last stop point in the video, so
+  // they can resume from there next time. The actual debounce happens on the frontend (not every
+  // service call), so the only restriction here is that the student must be enrolled in
+  // this course.
   @UseGuards(RolesGuard)
   @Roles(Role.STUDENT)
   @Patch(':id/lessons/:lessonId/progress')

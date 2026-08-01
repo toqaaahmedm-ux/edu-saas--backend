@@ -65,7 +65,7 @@ describe('QuizController', () => {
       service.getQuizWithQuestions.mockResolvedValue(mockQuiz);
       const result = await controller.getQuiz('quiz-123', mockUser);
       expect(result).toEqual(mockQuiz);
-      // ✅ بنتأكد إن tenantId اتبعت كمان (multi-tenant isolation fix)
+      // make sure tenantId was sent too (multi-tenant isolation fix)
       expect(service.getQuizWithQuestions).toHaveBeenCalledWith('quiz-123', mockUser.tenantId);
     });
 

@@ -4,11 +4,11 @@ import { AuthService } from './auth.service';
 import { UnauthorizedException } from '@nestjs/common';
 import type { Response, Request } from 'express';
 
-// ملحوظة: الملف ده بيتست AuthController نفسه (الـ HTTP layer) —
-// مش AuthService. الـ AuthService متغطية بالفعل في auth.service.spec.ts.
-// هنا بنتأكد إن الـ controller بيقرا الـ tenant header صح، بيحط الكوكيز
-// (access + refresh) صح، وما بيرجعش accessToken في الـ body (BE-H04)،
-// وإن refresh بيقرا refresh-token من الكوكي (BE-C01).
+// Note: this file tests AuthController itself (the HTTP layer) —
+// not AuthService. AuthService is already covered in auth.service.spec.ts.
+// here we're making sure the controller reads the tenant header correctly, sets the
+// (access + refresh) cookies correctly, and doesn't return accessToken in the body (BE-H04),
+// and that refresh reads the refresh-token from the cookie (BE-C01).
 
 const ACCESS_TOKEN = 'signed.jwt.token';
 const REFRESH_TOKEN = 'signed.refresh.token';
@@ -30,7 +30,7 @@ const mockAuthService = {
   reissueToken: jest.fn(),
 };
 
-// mock بسيط لـ express Response — بنحتاج بس .cookie() و .clearCookie() و .json()
+// simple mock for express Response — we only need .cookie(), .clearCookie(), and .json()
 const makeMockResponse = () => {
   const res: Partial<Response> = {
     cookie: jest.fn().mockReturnThis(),
@@ -94,7 +94,7 @@ describe('AuthController', () => {
         ACCESS_TOKEN,
         expect.objectContaining({ httpOnly: true }),
       );
-      // ✅ جديد — كوكي الـ refresh-token المنفصلة بـ path محدد (BE-C01)
+      // new — the separate refresh-token cookie with a specific path (BE-C01)
       expect(res.cookie).toHaveBeenCalledWith(
         'refresh-token',
         REFRESH_TOKEN,
@@ -102,8 +102,8 @@ describe('AuthController', () => {
       );
     });
 
-    // BE-H04 FIX: accessToken كان بيتبعت في الـ body — مكشوف لـ logging
-    // proxies. دلوقتي الـ body فيه بس success و data، مفيش accessToken خالص.
+    // BE-H04 FIX: accessToken used to be sent in the body — exposed to logging
+    // proxies. Now the body only has success and data, no accessToken at all.
     it('ما يرجعش accessToken في الـ body', async () => {
       mockAuthService.login.mockResolvedValue({
         accessToken: ACCESS_TOKEN,
@@ -142,10 +142,10 @@ describe('AuthController', () => {
   });
 
   describe('refresh', () => {
-    // BE-C01 FIX: refresh بقى بيقرا refresh-token من الكوكي (مش من
-    // req.user اللي كان جاي من JwtStrategy بعد ما يتأكد من التوكن
-    // القديم) — ده بيسمح بتحديث access token من غير ما الـ access
-    // القديم يكون لسه صالح.
+    // BE-C01 FIX: refresh now reads the refresh-token from the cookie (instead of
+    // req.user, which used to come from JwtStrategy after validating the old
+    // token) — this allows refreshing the access token even if the old access
+    // token is no longer valid.
     it('يقرأ refresh-token من الكوكي ويحط access token جديد', async () => {
       mockAuthService.refreshAccessToken.mockResolvedValue(ACCESS_TOKEN);
       const res = makeMockResponse();
@@ -184,7 +184,7 @@ describe('AuthController', () => {
       const res = makeMockResponse();
       await controller.logout(res);
       expect(res.clearCookie).toHaveBeenCalledWith('session-token');
-      // ✅ جديد — لازم يمسح refresh-token كمان بنفس الـ path
+      // new — must clear the refresh-token cookie too, with the same path
       expect(res.clearCookie).toHaveBeenCalledWith(
         'refresh-token',
         expect.objectContaining({ path: '/auth/refresh' }),

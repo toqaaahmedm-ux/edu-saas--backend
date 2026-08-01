@@ -86,9 +86,9 @@ describe('CoursesService', () => {
       await expect(service.findById('not-found', TENANT_ID)).rejects.toThrow(NotFoundException);
     });
 
-    // BE-C03: لو الكورس موجود فعلاً لكن تبع مستأجر تاني، الـ repository
-    // (بفلتر tenantId في WHERE) هيرجع null، فالـ service يرمي نفس
-    // NotFoundException — بدون ما يكشف إن الكورس موجود أصلاً عند مستأجر آخر.
+    // BE-C03: if the course does exist but belongs to a different tenant, the repository
+    // (filtered by tenantId in the WHERE) returns null, so the service throws the same
+    // NotFoundException — without revealing that the course exists at all for another tenant.
     it('يرمي NotFoundException لو الكورس تبع مستأجر تاني', async () => {
       mockCoursesRepository.findById.mockResolvedValue(null);
       await expect(service.findById('course-123', 'other-tenant')).rejects.toThrow(NotFoundException);
@@ -151,8 +151,8 @@ describe('CoursesService', () => {
         .rejects.toThrow(BadRequestException);
     });
 
-    // BE-C04: لو الـ admin بعت tenantId مختلف عن tenant الكورس، findById
-    // هيرمي NotFoundException قبل ما نوصل لفحص الملكية خالص.
+    // BE-C04: if the admin sends a tenantId different from the course's tenant, findById
+    // throws NotFoundException before we even get to the ownership check.
     it('يرمي NotFoundException لو الكورس تبع مستأجر تاني', async () => {
       mockCoursesRepository.findById.mockResolvedValue(null);
       await expect(service.update('course-123', 'admin-999', 'ADMIN', 'other-tenant', { title: 'x' }))

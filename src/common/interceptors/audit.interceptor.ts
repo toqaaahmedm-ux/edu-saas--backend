@@ -8,7 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 export const AUDIT_ACTION_KEY = 'audit_action';
 
-// Decorator لتحديد الـ action
+// Decorator to specify the action
 export const AuditAction = (action: string) =>
   (target: any, key: string, descriptor: PropertyDescriptor) => {
     Reflect.defineMetadata(AUDIT_ACTION_KEY, action, descriptor.value);
@@ -28,7 +28,7 @@ intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
       context.getHandler(),
     );
 
-    // لو مفيش action محدد — مش نسجل
+    // if no action is specified — don't log
     if (!action) return next.handle();
 
     const req = context.switchToHttp().getRequest();
@@ -42,9 +42,9 @@ intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
           // Falls back to response.id, then response.data.id, then null.
           const target = req.params?.id ?? response?.id ?? response?.data?.id ?? null;
 
-          // للأدمن العادي: tenantId بتاعه هو نفسه. للـ SUPER_ADMIN بيعمل createTenant
-          // لتينانت جديد، مفيش tenantId على المستخدم نفسه، فبنستخدم الـ target كـ tenantId
-          // في الحالة دي لأنه هو نفسه الـ tenant اللي اتعمل له الإجراء.
+          // for a regular admin: their own tenantId. For SUPER_ADMIN doing createTenant
+          // on a new tenant, the user itself has no tenantId, so we use the target as the tenantId
+          // in this case, since it's the same tenant the action was performed on.
           const tenantId = req.user?.tenantId ?? target ?? null;
 
           await this.prisma.auditLog.create({

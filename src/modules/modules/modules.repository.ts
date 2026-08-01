@@ -16,7 +16,7 @@ export class ModulesRepository {
     });
   }
 
-  // tenantId في الـ WHERE مباشرة، مش فحص لاحق — نفس منطق BE-C03 fix في courses
+  // tenantId directly in the WHERE, not a check afterward — same logic as the BE-C03 fix in courses
   findById(id: string, tenantId?: string) {
     return this.prisma.module.findFirst({
       where: {

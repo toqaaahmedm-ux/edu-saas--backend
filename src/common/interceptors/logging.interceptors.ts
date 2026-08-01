@@ -17,7 +17,7 @@ export class LoggingInterceptor implements NestInterceptor {
     const { method, url } = request;
     const now = Date.now();
 
-    // ✅ BE-L02: شيل الـ query params من الـ log عشان متتسجلش PII
+    // BE-L02: strip query params from the log so PII doesn't get logged
     const cleanUrl = url.split('?')[0];
 
     return next.handle().pipe(

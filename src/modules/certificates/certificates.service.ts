@@ -9,7 +9,7 @@ import * as puppeteer from 'puppeteer';
 import { CertificatesRepository } from './certificates.repository';
 import { PrismaService } from '../../prisma/prisma.service';
 
-// FIX #24: قاعدة واحدة مركزية للإصدار — نجاح الكويز + اكتمال الكورس
+// FIX #24: one central rule for issuance — quiz passed + course completed
 const PASSING_SCORE = 70;
 const REQUIRED_PROGRESS = 100;
 
@@ -24,14 +24,14 @@ export class CertificatesService {
     return this.certificatesRepository.findByStudentId(tenantId, studentId);
   }
 
-  // BE-C05 FIX: قبل كده findById كانت بترجع أي شهادة بالـ id من غير أي
-  // تحقق — أي مستخدم مصادق (وحتى endpoint مكشوف بدون auth خالص) كان
-  // يقدر يشوف بيانات شخصية لطالب تاني (اسم، إيميل، اسم الكورس...).
-  // دلوقتي بنتحقق من حاجتين بالترتيب:
-  //  1. الشهادة تبع نفس المستأجر (tenantId) — لو لأ نرمي NotFoundException
-  //     بدل ForbiddenException عشان منكشفش إن الشهادة موجودة عند مستأجر تاني.
-  //  2. صاحب الطلب هو الطالب نفسه، أو ADMIN/TEACHER في نفس المستأجر —
-  //     غير ذلك نرمي ForbiddenException.
+  // BE-C05 FIX: before this, findById would return any certificate by id with no
+  // verification at all — any authenticated user (and even an endpoint exposed with no auth)
+  // could view another student's personal data (name, email, course name...).
+  // Now we check two things in order:
+  //  1. The certificate belongs to the same tenant (tenantId) — if not, throw NotFoundException
+  //     instead of ForbiddenException, so we don't leak that it exists for another tenant.
+  //  2. The requester is the student themselves, or ADMIN/TEACHER in the same tenant —
+  //     otherwise throw ForbiddenException.
   async findById(
     id: string,
     tenantId: string,
@@ -52,7 +52,7 @@ export class CertificatesService {
     return cert;
   }
 
-  // FIX #24: helper مشترك للتحقق من الشروط
+  // FIX #24: shared helper to check the conditions
   private async assertEligible(studentId: string, courseId: string) {
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId } },
@@ -60,7 +60,7 @@ export class CertificatesService {
     if (!enrollment) {
       throw new ForbiddenException('You must be enrolled in the course to get a certificate');
     }
-    // FIX #24: نفس الـ threshold في المسارين
+    // FIX #24: same threshold on both paths
     if (enrollment.progress < REQUIRED_PROGRESS) {
       throw new BadRequestException(
         `Course not completed — progress must reach ${REQUIRED_PROGRESS}%`,
@@ -79,7 +79,7 @@ export class CertificatesService {
       facultyName: string;
     },
   ) {
-    // FIX #24: استخدام الـ helper المشترك
+    // FIX #24: use the shared helper
     await this.assertEligible(studentId, courseId);
 
     const existing = await this.certificatesRepository.findByStudentAndCourse(
@@ -110,7 +110,7 @@ export class CertificatesService {
     });
     if (!enrollment) return null;
 
-    // FIX #24: الإصدار التلقائي بيتحقق من التقدم زي الإصدار اليدوي
+    // FIX #24: automatic issuance checks progress the same way manual issuance does
     if (enrollment.progress < REQUIRED_PROGRESS) return null;
 
     const existing = await this.certificatesRepository.findByStudentAndCourse(
@@ -119,8 +119,8 @@ export class CertificatesService {
     );
     if (existing) return existing;
 
-    // PDF-FIX: كان بيستقبل الـ score كـ parameter بس مش بيحفظه أبدًا في
-    // الشهادة — دلوقتي بنمرره فعليًا عشان يظهر في شهادة الـ PDF.
+    // PDF-FIX: used to accept score as a parameter but never actually saved it on
+    // the certificate — now we actually pass it through so it shows up on the PDF certificate.
     return this.certificatesRepository.create({
       tenantId,
       studentId,
@@ -147,8 +147,8 @@ export class CertificatesService {
     return 'with Satisfactory Standing';
   }
 
-  // بيبني نفس تصميم الـ Certificate.tsx بالضبط لكن كـ HTML/CSS ثابت
-  // (بدون Tailwind) عشان يترندر بشكل مضمون جوه Puppeteer.
+  // builds the exact same design as Certificate.tsx but as static HTML/CSS
+  // (no Tailwind) so it renders reliably inside Puppeteer.
   private buildCertificateHtml(cert: any, lang: 'en' | 'ar'): string {
     const isAr = lang === 'ar';
     const dir = isAr ? 'rtl' : 'ltr';
@@ -184,9 +184,9 @@ export class CertificatesService {
           officialSeal: 'Official Seal',
         };
 
-    // PDF-FIX: الشهادات القديمة ممكن ما يكونش عندها score محفوظ (null).
-    // لو موجود بنعرض الدرجة والتقدير، لو مش موجود بنعرض جملة إكمال عامة
-    // بدل ما نعرض "undefined%" أو نكسر التصميم.
+    // PDF-FIX: older certificates might not have a saved score (null).
+    // if it exists we show the score and grade, if not we show a generic completion sentence
+    // instead of showing "undefined%" or breaking the layout.
     const scoreBlockHtml =
       cert.score !== null && cert.score !== undefined
         ? `<p class="body-text">${labels.passed} <b>${cert.examName}</b> examination<br/>
@@ -306,9 +306,9 @@ export class CertificatesService {
 </html>`;
   }
 
-  // بيعيد استخدام findById بالكامل — يعني نفس الحماية بالظبط اللي في
-  // GET /certificates/:id (فحص tenant + فحص إن صاحب الطلب هو الطالب
-  // نفسه أو ADMIN/TEACHER)، فمفيش أي مسار جديد للوصول غير المصرح به.
+  // fully reuses findById — meaning the exact same protection as
+  // GET /certificates/:id (tenant check + checking that the requester is the student
+  // themselves or ADMIN/TEACHER), so there's no new path for unauthorized access.
   async generateCertificatePdf(
     id: string,
     tenantId: string,
@@ -334,8 +334,8 @@ export class CertificatesService {
       });
       return Buffer.from(pdfBuffer);
     } finally {
-      // مهم جدًا: لازم نقفل الـ browser دايمًا حتى لو حصل خطأ، عشان منسربش
-      // عمليات Chromium على السيرفر (خطر حقيقي على AWS EC2 مع الوقت).
+      // very important: we must always close the browser even if an error happens, so we don't leak
+      // Chromium processes on the server (a real risk on AWS EC2 over time).
       await browser.close();
     }
   }

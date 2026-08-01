@@ -38,8 +38,8 @@ export class CertificatesRepository {
     examName: string;
     institutionName: string;
     facultyName: string;
-    // PDF-FIX: score/letterGrade كانوا موجودين في الـ schema بس مش بيتحفظوا أبدًا.
-    // اتضافوا هنا كـ optional عشان أي كود قديم بينادي create() من غيرهم يفضل شغال بدون تعديل.
+    // PDF-FIX: score/letterGrade existed in the schema but were never actually being saved.
+    // added here as optional so any old code calling create() without them keeps working unchanged.
     score?: number;
     letterGrade?: string;
   }) {

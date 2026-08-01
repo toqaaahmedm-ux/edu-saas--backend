@@ -35,9 +35,9 @@ import { AppService } from './app.service';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      // SEC-05 FIX: لو أي متغير حرج فاضي أو ناقص، التطبيق يوقف عن الإقلاع
-      // فوراً بدل ما يشتغل بقيمة "undefined" كـ string — السيناريو ده كان
-      // بيخلي JWT_SECRET يبقى string ثابت ومعروف وأي حد عارف ده يقدر يوقّع JWT صالح بنفسه.
+      // SEC-05 FIX: if any critical env var is empty or missing, the app stops booting
+      // immediately instead of running with the string "undefined" — this scenario used to
+      // let JWT_SECRET become a fixed, known string that anyone who knew it could sign a valid JWT with.
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
           .valid('development', 'production', 'test')
@@ -60,8 +60,8 @@ import { AppService } from './app.service';
         RESEND_API_KEY: Joi.string().required(),
       }),
       validationOptions: {
-        // نجمع كل الأخطاء مرة واحدة بدل ما نوقف عند أول واحد بس —
-        // أسهل في الإصلاح لو أكتر من متغير ناقص
+        // collect all the errors at once instead of stopping at the first one —
+        // easier to fix if more than one variable is missing
         abortEarly: false,
       },
     }),
@@ -101,13 +101,13 @@ import { AppService } from './app.service';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
-    // BE-C06 FIX: AuditInterceptor كانت معرَّفة كاملة ومعاها decorator
-    // @AuditAction مستخدم فعلاً في admin.controller.ts (TENANT_SUSPENDED,
-    // PLAN_ASSIGNED) — لكن مفيش تسجيل خالص في الـ pipeline، فمفيش audit
-    // log واحد بيتكتب فعلياً. الـ interceptor عنده dependencies
-    // (PrismaService, Reflector)، فلازم يتسجل كـ APP_INTERCEPTOR provider
-    // هنا (مش new AuditInterceptor() في main.ts) عشان NestJS يحقن
-    // الـ dependencies بتاعته صح.
+    // BE-C06 FIX: AuditInterceptor was fully defined, along with the
+    // @AuditAction decorator that's already used in admin.controller.ts (TENANT_SUSPENDED,
+    // PLAN_ASSIGNED) — but it was never registered in the pipeline, so not a single audit
+    // log was actually being written. The interceptor has dependencies
+    // (PrismaService, Reflector), so it needs to be registered as an APP_INTERCEPTOR provider
+    // here (not `new AuditInterceptor()` in main.ts) so NestJS can inject
+    // its dependencies correctly.
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,

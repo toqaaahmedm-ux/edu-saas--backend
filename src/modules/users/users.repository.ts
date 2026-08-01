@@ -27,7 +27,7 @@ const safeUserSelect = {
 export class UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Multi-tenant: ÙƒÙ„ query Ø¨ØªÙÙ„ØªØ± Ø¨Ù€ tenantId
+  // Multi-tenant: every query filters by tenantId
   async findAll(tenantId: string, page: number, limit: number): Promise<{ users: SafeUser[]; total: number }> {
     const skip = (page - 1) * limit;
     const [users, total] = await this.prisma.$transaction([
@@ -54,7 +54,7 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  // Multi-tenant: email unique per tenant â€” Ù„Ø§Ø²Ù… tenantId + email Ù…Ø¹ Ø¨Ø¹Ø¶
+  // Multi-tenant: email unique per tenant — tenantId + email must go together
   async findByEmail(tenantId: string, email: string) {
     return this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email } },
@@ -88,7 +88,7 @@ export class UsersRepository {
     await this.prisma.user.delete({ where: { id } });
   }
 
-  // Multi-tenant: Ø¹Ø¯ Ø§Ù„Ù€ users Ø¨Ù€ role Ø¯Ø§Ø®Ù„ Ø§Ù„Ù€ tenant
+  // Multi-tenant: count users by role within the tenant
   async countByRole(tenantId: string, role: Role): Promise<number> {
     return this.prisma.user.count({ where: { tenantId, role } });
   }

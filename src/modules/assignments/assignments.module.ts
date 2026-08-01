@@ -7,7 +7,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { GradesModule } from '../grades/grades.module';
 
 @Module({
-  imports: [PrismaModule, CoursesModule, GradesModule], // عشان نستخدم CoursesService في فحص الملكية + GradesService لإعادة الحساب التلقائي
+  // so we can use CoursesService for the ownership check + GradesService for automatic recalculation
   controllers: [AssignmentsController],
   providers: [AssignmentsService, AssignmentsRepository],
   exports: [AssignmentsService],

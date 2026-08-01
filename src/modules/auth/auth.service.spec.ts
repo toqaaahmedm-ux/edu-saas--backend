@@ -5,9 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 
-// HIGH-13 FIX: bcryptjs بيستخدم ES Module، فـ jest.spyOn مش قادر يعيد تعريف
-// الـ property وبيرمي "Cannot redefine property: compare". الحل هو mock
-// للـ module كاملاً على مستوى الـ file قبل أي import تاني.
+// HIGH-13 FIX: bcryptjs uses an ES Module, so jest.spyOn can't redefine the
+// property and throws "Cannot redefine property: compare". The fix is to mock
+// the whole module at the file level before any other import.
 jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('$2b$10$hashedpassword'),
   compare: jest.fn().mockResolvedValue(true),
@@ -57,8 +57,8 @@ const mockJwtService = {
   verify: jest.fn(),
 };
 
-// ✅ جديد — AuthService بقت تستخدم ConfigService لقراءة JWT_REFRESH_SECRET
-// و JWT_REFRESH_EXPIRES_IN بدل ما تكون hardcoded (BE-C01)
+// new — AuthService now uses ConfigService to read JWT_REFRESH_SECRET
+// and JWT_REFRESH_EXPIRES_IN instead of having them hardcoded (BE-C01)
 const mockConfigService = {
   get: jest.fn((key: string, defaultValue?: any) => {
     const config: Record<string, string> = {
@@ -93,12 +93,12 @@ describe('AuthService', () => {
     service = module.get<AuthService>(AuthService);
     jest.clearAllMocks();
 
-    // إعادة تعيين الـ default values بعد clearAllMocks
+    // reset the default values after clearAllMocks
     (bcrypt.hash as jest.Mock).mockResolvedValue(HASHED);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-    // ✅ signToken و signRefreshToken بيستخدموا sign بس بـ secrets مختلفة،
-    // فبنرجع توكنين مختلفين حسب الترتيب اللي بيتنادى بيهم في الكود:
-    // signToken (access) بيتنادى أولاً، وبعدين signRefreshToken (refresh).
+    // signToken and signRefreshToken both use sign, just with different secrets,
+    // so we return two different tokens based on the order they're called in the code:
+    // signToken (access) is called first, then signRefreshToken (refresh).
     mockJwtService.sign
       .mockReturnValueOnce(ACCESS_TOKEN)
       .mockReturnValueOnce(REFRESH_TOKEN);
@@ -158,7 +158,7 @@ describe('AuthService', () => {
       const result = await service.login(makeDto(), TENANT_ID);
 
       expect(result).toHaveProperty('accessToken', ACCESS_TOKEN);
-      expect(result).toHaveProperty('refreshToken', REFRESH_TOKEN); // ✅ جديد
+      // new
       expect(result.data).toEqual({
         id: mockUser.id,
         tenantId: TENANT_ID,
@@ -177,8 +177,8 @@ describe('AuthService', () => {
       );
     });
 
-    // ✅ جديد — signRefreshToken لازم تستخدم JWT_REFRESH_SECRET من ConfigService
-    // مش الـ secret الأساسي بتاع access token (BE-C01)
+    // new — signRefreshToken must use JWT_REFRESH_SECRET from ConfigService
+    // not the main access token secret (BE-C01)
     it('يوقّع الـ refresh token بـ JWT_REFRESH_SECRET المختلف', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
       await service.login(makeDto(), TENANT_ID);
@@ -218,7 +218,7 @@ describe('AuthService', () => {
       });
 
       expect(result).toHaveProperty('accessToken', ACCESS_TOKEN);
-      expect(result).toHaveProperty('refreshToken', REFRESH_TOKEN); // ✅ جديد
+      // new
       expect(result.data.tenantId).toBeNull();
       expect(result.data.role).toBe('SUPER_ADMIN');
       expect(mockJwtService.sign).toHaveBeenNthCalledWith(
@@ -235,15 +235,15 @@ describe('AuthService', () => {
     });
   });
 
-  // ── refreshAccessToken (جديد بالكامل — BE-C01) ───────────────────────────
+  // ── refreshAccessToken (brand new — BE-C01) ───────────────────────────
 
   describe('refreshAccessToken', () => {
     it('يرجع access token جديد لو الـ refresh token صحيح', async () => {
       mockJwtService.verify.mockReturnValue({ sub: mockUser.id });
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      // الميثود دي بتنده على signToken بس (مفيش refresh token جديد)،
-      // فبنحدد قيمة العودة بشكل صريح بدل الاعتماد على ترتيب
-      // mockReturnValueOnce الموروث من beforeEach.
+      // this method only calls signToken (no new refresh token),
+      // so we set the return value explicitly instead of relying on the order
+      // of mockReturnValueOnce inherited from beforeEach.
       mockJwtService.sign.mockReset().mockReturnValue(ACCESS_TOKEN);
 
       const newToken = await service.refreshAccessToken('some.refresh.token');

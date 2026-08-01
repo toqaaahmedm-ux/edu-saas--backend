@@ -18,15 +18,15 @@ export class NotificationsService {
     return this.prisma.notification.create({ data });
   }
 
-  // ── بيرسل لكل طلاب tenant معين ───────────────────────────────
-  // PERF-19 FIX: قبل كده كنا بنجيب كل مستخدمي الـ tenant دفعة واحدة
-  // بـ findMany() من غير حد — مع 10,000 طالب ده معناه 10,000 object
-  // في الذاكرة + createMany() بـ 10,000 row في استعلام واحد، وده كان
-  // هيعمل timeout أو memory crash.
+  // ── sends to all students of a given tenant ───────────────────────────────
+  // PERF-19 FIX: before this, we were fetching all of a tenant's users at once
+  // with findMany() with no limit — with 10,000 students that means 10,000 objects
+  // in memory + a createMany() with 10,000 rows in a single query, which would
+  // cause a timeout or a memory crash.
   //
-  // الحل: بنجيب المستخدمين على دفعات (batches) بحجم 500 باستخدام
-  // cursor-based pagination، وبنعمل createMany() لكل دفعة على حدة.
-  // ده بيخلي الـ memory usage ثابت بغض النظر عن عدد المستخدمين.
+  // The fix: fetch users in batches of 500 using
+  // cursor-based pagination, and run createMany() for each batch separately.
+  // this keeps memory usage constant no matter how many users there are.
   async broadcastToTenant(data: {
     tenantId: string;
     title: string;
@@ -41,7 +41,7 @@ export class NotificationsService {
         where: { tenantId: data.tenantId },
         select: { id: true },
         take: BROADCAST_BATCH_SIZE,
-        // cursor-based pagination — أسرع من skip/offset مع بيانات كبيرة
+        // cursor-based pagination — faster than skip/offset with large datasets
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
         orderBy: { id: 'asc' },
       });
@@ -61,7 +61,7 @@ export class NotificationsService {
       totalSent += users.length;
       cursor = users[users.length - 1].id;
 
-      // لو الدفعة أقل من الحد الأقصى، يبقى خلصنا
+      // if the batch is smaller than the limit, we're done
       if (users.length < BROADCAST_BATCH_SIZE) break;
     }
 

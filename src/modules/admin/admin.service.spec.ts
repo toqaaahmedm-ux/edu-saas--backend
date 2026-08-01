@@ -9,7 +9,7 @@ jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed_owner_password'),
 }));
 
-// Prisma transaction بيبعت (tx) بنفس شكل الـ prisma client — بنموكه بنفس الشكل
+// Prisma transaction passes (tx) in the same shape as the prisma client — we mock it the same way
 const mockTx = {
   tenant: {
     create: jest.fn(),
@@ -97,8 +97,8 @@ describe('AdminService', () => {
     };
 
     it('ينشئ tenant + owner في transaction واحدة وبيربطهم صح', async () => {
-      mockPrismaService.tenant.findUnique.mockResolvedValue(null); // subdomain مش مكرر
-      mockPrismaService.user.findFirst.mockResolvedValue(null); // owner email مش مكرر
+      // subdomain isn't a duplicate
+      // owner email isn't a duplicate
 
       mockTx.tenant.create.mockResolvedValue(mockNewTenant);
       mockTx.user.create.mockResolvedValue(mockOwnerUser);
@@ -111,10 +111,10 @@ describe('AdminService', () => {
 
       const result = await service.createTenant(dto);
 
-      // اتشفرت الباسورد قبل ما تتخزن
+      // password was hashed before being stored
       expect(bcrypt.hash).toHaveBeenCalledWith(dto.ownerPassword, 10);
 
-      // الـ tenant اتعمل بحالة TRIAL ومعاه trialEndsAt
+      // the tenant was created with TRIAL status and a trialEndsAt
       expect(mockTx.tenant.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -126,7 +126,7 @@ describe('AdminService', () => {
         }),
       );
 
-      // الـ owner اتعمل بدور ADMIN ومربوط بالـ tenant الصح
+      // the owner was created with the ADMIN role and linked to the right tenant
       expect(mockTx.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -138,7 +138,7 @@ describe('AdminService', () => {
         }),
       );
 
-      // الـ tenant اتحدّث بـ ownerUserId بعد إنشاء الـ owner
+      // the tenant was updated with ownerUserId after the owner was created
       expect(mockTx.tenant.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: mockNewTenant.id },

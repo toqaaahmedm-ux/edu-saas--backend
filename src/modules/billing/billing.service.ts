@@ -141,7 +141,7 @@ export class BillingService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    // FIX #22: QUARTERLY غير مدعوم في Stripe — ارفض الطلب بدل silent wrong billing
+    // FIX #22: QUARTERLY isn't supported in Stripe — reject the request instead of silently billing wrong
     if (plan.billingCycle === BillingCycle.QUARTERLY) {
       throw new NotImplementedException(
         'Quarterly billing is not yet supported via Stripe. Please choose Monthly or Annual.',
@@ -226,9 +226,9 @@ export class BillingService {
       data: { gatewayRef: session.subscription as string },
     });
 
-    // FIX #23: تحديث status الـ tenant لـ ACTIVE تلقائياً بعد الدفع فقط —
-    // مش جزء من assignPlanToTenant لأن تغيير الخطة يدويًا من الأدمن
-    // مش لازم يفعّل الـ tenant تلقائيًا
+    // FIX #23: update the tenant's status to ACTIVE automatically only after payment —
+    // not part of assignPlanToTenant, since manually changing the plan from the admin
+    // shouldn't automatically activate the tenant
     await this.prisma.tenant.update({
       where: { id: tenantId },
       data: { status: 'ACTIVE' },
@@ -263,7 +263,7 @@ export class BillingService {
       data: { status: 'ACTIVE', currentPeriodEnd: newPeriodEnd },
     });
 
-    // FIX #23: تأكد إن الـ tenant ACTIVE عند كل دفعة ناجحة
+    // FIX #23: make sure the tenant is ACTIVE on every successful payment
     await this.prisma.tenant.update({
       where: { id: subscription.tenantId },
       data: { status: 'ACTIVE' },

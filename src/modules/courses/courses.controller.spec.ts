@@ -38,10 +38,10 @@ const mockUser = {
   role: 'TEACHER',
 };
 
-// BE-C03: findAll و findOne بقوا بياخدوا tenantId من req.tenantId
-// (المتحط بواسطة TenantMiddleware) مش من query أو من المستخدم مباشرة.
-// في الـ unit test، بنحط mock request فيه tenantId يدوياً لأن
-// الـ middleware نفسه مش بيشتغل هنا.
+// BE-C03: findAll and findOne now take tenantId from req.tenantId
+// (set by TenantMiddleware), not from a query param or directly from the user.
+// in the unit test, we set a mock request with tenantId manually since
+// the middleware itself doesn't run here.
 const mockReqWithTenant = { tenantId: TENANT_ID } as any;
 const mockReqNoTenant = { tenantId: null } as any;
 
@@ -73,9 +73,9 @@ describe('CoursesController', () => {
       expect(mockCoursesService.findAll).toHaveBeenCalledWith(TENANT_ID, 1, 10, undefined, undefined);
     });
 
-    // findAll مش async — لما الـ tenant context مفقود بترمي الخطأ مباشرة
-    // (synchronously) قبل ما توصل لأي return Promise، فبنستخدم
-    // expect(() => ...).toThrow بدل rejects.toThrow.
+    // findAll isn't async — when the tenant context is missing it throws the error directly
+    // (synchronously) before reaching any return Promise, so we use
+    // expect(() => ...).toThrow instead of rejects.toThrow.
     it('يرمي BadRequestException لو مفيش tenant context', () => {
       expect(() => controller.findAll(mockReqNoTenant, '1', '10', undefined, undefined))
         .toThrow(BadRequestException);
@@ -91,7 +91,7 @@ describe('CoursesController', () => {
       expect(mockCoursesService.findById).toHaveBeenCalledWith('course-123', TENANT_ID);
     });
 
-    // findOne برضو مش async — نفس السبب أعلاه
+    // findOne also isn't async — same reason as above
     it('يرمي BadRequestException لو مفيش tenant context', () => {
       expect(() => controller.findOne('course-123', mockReqNoTenant))
         .toThrow(BadRequestException);

@@ -18,7 +18,7 @@ export class AppService {
         this.prisma.certificate.count(),
       ]);
 
-    // ── NEW-07: إيرادات حقيقية من DB ──
+    // ── NEW-07: real revenue from the DB ──
     const revenueResult = await this.prisma.enrollment.findMany({
       where: { status: 'ACTIVE' },
       include: {
@@ -39,8 +39,8 @@ export class AppService {
       totalCourses,
       totalEnrollments,
       totalCertificates,
-      totalRevenue,        // ← حقيقي من DB
-      activeStudents,      // ← عدد الطلاب النشطين
+      // ← real, from the DB
+      // ← count of active students
     };
   }
 }

@@ -14,7 +14,7 @@ export class AssignmentsRepository {
     });
   }
 
-  // tenantId مباشر في WHERE، نفس منطق BE-C03 fix في courses
+  // tenantId directly in the WHERE clause, same logic as the BE-C03 fix in courses
   findById(id: string, tenantId?: string) {
     return this.prisma.assignment.findFirst({
       where: {
@@ -105,8 +105,8 @@ export class AssignmentsRepository {
     });
   }
 
-  // upsert عشان الطالب يقدر يعدّل تسليمه قبل الـ dueDate (resubmit) —
-  // الـ unique constraint [assignmentId, studentId] هو اللي بيمنع تكرار الصف
+  // upsert so the student can edit their submission before the dueDate (resubmit) —
+  // the unique constraint [assignmentId, studentId] is what prevents duplicate rows
   upsertSubmission(data: {
     tenantId: string;
     assignmentId: string;

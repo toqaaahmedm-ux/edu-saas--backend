@@ -21,8 +21,8 @@ export interface AnswerSnapshot {
   isCorrect: boolean;
 }
 
-// QUIZ-WINDOW-NEW: نوع مشترك لحالة إتاحة الكويز، بيستخدمه الفرونت لعرض
-// الشارة/العد التنازلي الصحيح.
+// QUIZ-WINDOW-NEW: shared type for quiz availability status, used by the frontend to show
+// the right badge/countdown.
 type QuizAvailability = 'upcoming' | 'open' | 'closed';
 
 @Injectable()
@@ -35,7 +35,7 @@ export class QuizService {
     private readonly billingService: BillingService,
   ) { }
 
-  // QUIZ-WINDOW-NEW: helper مشترك لحساب حالة الإتاحة بناءً على openAt/closeAt
+  // QUIZ-WINDOW-NEW: shared helper to compute availability status based on openAt/closeAt
   private getAvailability(quiz: { openAt?: Date | null; closeAt?: Date | null }): QuizAvailability {
     const now = new Date();
     if (quiz.openAt && now < new Date(quiz.openAt)) return 'upcoming';
@@ -56,9 +56,9 @@ export class QuizService {
 
     const quizzes = await this.quizRepository.findAllWithCourse(tenantId, enrolledCourseIds, courseId);
 
-    // QUIZ-WINDOW-NEW: نضيف حالة الإتاحة الجاهزة لكل كويز عشان الفرونت
-    // يعرض الشارة الصح من غير ما يحتاج يحسب بنفسه (وده أدق لأنه محسوب
-    // بوقت السيرفر مش وقت جهاز الطالب).
+    // QUIZ-WINDOW-NEW: add the ready-made availability status to each quiz so the frontend
+    // can show the right badge without calculating it itself (and it's more accurate since it's
+    // computed using server time, not the student's device time).
     return quizzes.map((q) => ({
       ...q,
       availability: this.getAvailability(q),
@@ -91,9 +91,9 @@ export class QuizService {
       throw new ForbiddenException('You must be enrolled in the course to take this quiz');
     }
 
-    // QUIZ-WINDOW-NEW: منع بدء الكويز قبل معاده أو بعد قفله. بنحسب وقت
-    // السيرفر مش وقت الطالب عشان محدش يقدر يلف الساعة عنده ويفتح كويز
-    // قافل.
+    // QUIZ-WINDOW-NEW: prevent starting the quiz before its scheduled time or after it closes. We compute
+    // using server time, not the student's time, so no one can turn back their clock and open a
+    // closed quiz.
     const now = new Date();
     if (quiz.openAt && now < new Date(quiz.openAt)) {
       throw new ForbiddenException(
@@ -143,11 +143,11 @@ export class QuizService {
       throw new ForbiddenException('You must be enrolled in the course to submit this quiz');
     }
 
-    // QUIZ-WINDOW-NEW: هنا بنسمح بالتسليم حتى لو closeAt عدّى — لأن
-    // الطالب يكون بدأ المحاولة أصلاً قبل القفل (ده اتحقق منه في
-    // startQuiz)، ومنعه من التسليم دلوقتي معناه ضياع إجاباته ظلمًا.
-    // القفل الحقيقي هو منع أي محاولة *جديدة* تبدأ بعد closeAt، مش منع
-    // تسليم محاولة شغالة أصلاً.
+    // QUIZ-WINDOW-NEW: here we allow submitting even if closeAt has passed — because
+    // the student would have already started the attempt before it closed (that's checked in
+    // startQuiz), and blocking submission now would mean unfairly losing their answers.
+    // The real lock is preventing any *new* attempt from starting after closeAt, not blocking
+    // submission of an attempt that's already in progress.
 
     const attempt = await this.quizRepository.findAttempt(studentId, quizId);
     if (!attempt) throw new BadRequestException('You must start the quiz first');
@@ -308,8 +308,8 @@ export class QuizService {
       title: string;
       timeLimit?: number;
       passScore?: number;
-      // QUIZ-WINDOW-NEW: اختياريين — لو المعلم سابهم فاضيين، الكويز
-      // يفضل متاح على طول زي ما كان قبل كده (سلوك افتراضي غير كاسر).
+      // QUIZ-WINDOW-NEW: optional — if the teacher left them empty, the quiz
+      // stays available as before (a non-breaking default behavior).
       openAt?: string;
       closeAt?: string;
       questions: {
@@ -336,8 +336,8 @@ export class QuizService {
       throw new BadRequestException('Quiz must have at least one question');
     }
 
-    // QUIZ-WINDOW-NEW: تحقق منطقي بسيط — لو الاتنين محددين، لازم القفل
-    // يكون بعد الفتح.
+    // QUIZ-WINDOW-NEW: simple logical check — if both are set, the closing time
+    // must be after the opening time.
     const openAtDate = data.openAt ? new Date(data.openAt) : null;
     const closeAtDate = data.closeAt ? new Date(data.closeAt) : null;
     if (openAtDate && closeAtDate && closeAtDate <= openAtDate) {

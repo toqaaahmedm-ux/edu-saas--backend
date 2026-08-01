@@ -22,7 +22,7 @@ export class DunningService {
   async markExpiredSubscriptions() {
     const now = new Date();
 
-    // ✅ BE-M04: جيب الـ IDs الأول بدل ما نعمل N updates
+    // BE-M04: get the IDs first instead of doing N updates
     const expired = await this.prisma.subscription.findMany({
       where: { status: 'ACTIVE', currentPeriodEnd: { lt: now } },
       select: { id: true, tenantId: true, planId: true },
@@ -32,13 +32,13 @@ export class DunningService {
 
     this.logger.log(`📋 Found ${expired.length} expired subscriptions`);
 
-    // ✅ BE-M04: updateMany بدل حلقة for
+    // BE-M04: updateMany instead of a for loop
     await this.prisma.subscription.updateMany({
       where: { id: { in: expired.map((s) => s.id) } },
       data: { status: 'PAST_DUE' },
     });
 
-    // ✅ BE-M04: createMany بدل حلقة for
+    // BE-M04: createMany instead of a for loop
     await this.prisma.auditLog.createMany({
       data: expired.map((sub) => ({
         tenantId: sub.tenantId,
@@ -58,7 +58,7 @@ export class DunningService {
     const graceCutoff = new Date();
     graceCutoff.setDate(graceCutoff.getDate() - this.GRACE_PERIOD_DAYS);
 
-    // ✅ BE-M04: جيب الـ IDs الأول
+    // BE-M04: get the IDs first
     const pastDue = await this.prisma.subscription.findMany({
       where: {
         status: 'PAST_DUE',
@@ -75,19 +75,19 @@ export class DunningService {
     const subIds = pastDue.map((s) => s.id);
     const now = new Date();
 
-    // ✅ BE-M04: updateMany للـ subscriptions
+    // BE-M04: updateMany for the subscriptions
     await this.prisma.subscription.updateMany({
       where: { id: { in: subIds } },
       data: { status: 'CANCELLED' },
     });
 
-    // ✅ BE-M04: updateMany للـ tenants
+    // BE-M04: updateMany for the tenants
     await this.prisma.tenant.updateMany({
       where: { id: { in: tenantIds } },
       data: { status: 'SUSPENDED' },
     });
 
-    // ✅ BE-M04: createMany للـ audit logs
+    // BE-M04: createMany for the audit logs
     await this.prisma.auditLog.createMany({
       data: pastDue.map((sub) => ({
         tenantId: sub.tenantId,

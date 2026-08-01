@@ -30,8 +30,8 @@ export class QuizController {
       title: string;
       timeLimit?: number;
       passScore?: number;
-      // QUIZ-WINDOW-NEW: اختياريين، جايين كـ ISO string من datetime-local
-      // في الفرونت.
+      // QUIZ-WINDOW-NEW: optional, comes as an ISO string from the datetime-local
+      // input on the frontend.
       openAt?: string;
       closeAt?: string;
       questions: {

@@ -9,7 +9,7 @@ import {
 import { Request, Response } from 'express';
 import * as Sentry from '@sentry/node';
 
-@Catch()  // ← بيمسك كل الـ exceptions مش بس HttpException
+// ← catches all exceptions, not just HttpException
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
@@ -34,14 +34,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
         status = HttpStatus.NOT_FOUND;
         message = 'Record not found';
       } else {
-        // لو مش في production — ابعت الـ message الحقيقي للـ debug
+        // if not in production — send the real message for debugging
         message = process.env.NODE_ENV !== 'production'
           ? exception.message
           : 'Internal server error';
       }
     }
 
-    // لوج الـ error في السيرفر
+    // log the error on the server
     this.logger.error(
       `${request.method} ${request.url} — ${status} — ${exception instanceof Error ? exception.message : exception}`,
     );

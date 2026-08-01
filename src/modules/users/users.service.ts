@@ -13,7 +13,7 @@ import * as bcrypt from 'bcryptjs';
 export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
-    // NEW: direct Prisma access for the teacher-approval flow below â€”
+    // NEW: direct Prisma access for the teacher-approval flow below �
     // these are simple tenant-scoped queries that don't need a dedicated
     // repository method yet, same pattern already used elsewhere
     // (e.g. CoursesService injects PrismaService alongside its repository).
@@ -54,8 +54,8 @@ export class UsersService {
     return { message: 'Password updated successfully' };
   }
 
-  // Security fix (Ø£): this endpoint is tenant-scoped and admin-triggered, so it
-  // should never be able to touch SUPER_ADMIN in either direction â€” not assign it,
+  // Security fix (a): this endpoint is tenant-scoped and admin-triggered, so it
+  // should never be able to touch SUPER_ADMIN in either direction � not assign it,
   // and not modify an existing one. Also locking it to same-tenant users only,
   // since an ADMIN has no business reaching into another tenant's user table.
   async updateRole(id: string, tenantId: string, role: Role, requestUserId: string) {
@@ -100,7 +100,7 @@ export class UsersService {
 
   // â”€â”€â”€ Teacher approval workflow (Admin Report Bug #2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  // the list behind the admin's "Pending Approvals" queue â€” teachers who
+  // the list behind the admin's "Pending Approvals" queue � teachers who
   // self-registered and are blocked from logging in until reviewed
   async getPendingTeachers(tenantId: string) {
     return this.prisma.user.findMany({
@@ -134,7 +134,7 @@ export class UsersService {
     });
 
     // in-app notification so the teacher actually finds out they can log
-    // in now â€” matches the PENDING notification created at registration
+    // in now � matches the PENDING notification created at registration
     await this.prisma.notification.create({
       data: {
         tenantId,
@@ -159,7 +159,7 @@ export class UsersService {
 
     // a rejected registration never had real access to anything, so we
     // remove the account outright rather than leaving a dead SUSPENDED
-    // row behind â€” nothing else in the system references it yet
+    // row behind � nothing else in the system references it yet
     await this.prisma.user.delete({ where: { id } });
 
     return { message: 'Teacher registration rejected' };

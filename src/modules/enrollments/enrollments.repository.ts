@@ -41,7 +41,7 @@ export class EnrollmentsRepository {
     });
   }
 
-  // Multi-tenant: لازم tenantId في الـ create
+  // Multi-tenant: tenantId is required on create
   async create(tenantId: string, studentId: string, courseId: string) {
     return this.prisma.enrollment.create({
       data: { tenantId, studentId, courseId },
@@ -55,7 +55,7 @@ export class EnrollmentsRepository {
     });
   }
 
-  // BL-04: progress = 100 → COMPLETED تلقائياً
+  // BL-04: progress = 100 → COMPLETED automatically
   async updateProgress(id: string, progress: number) {
     return this.prisma.enrollment.update({
       where: { id },

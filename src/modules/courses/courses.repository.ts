@@ -75,11 +75,11 @@ export class CoursesRepository {
   }
 
   // BE-C03 FIX: findById used to fetch the course by id with NO tenantId
-  // filter â€” meaning GET /courses/:id could return a course belonging to
+  // filter — meaning GET /courses/:id could return a course belonging to
   // a completely different tenant if someone knew the UUID. tenantId is
   // now part of the WHERE clause itself (not a check performed after the
   // fetch), so the query returns null when the course doesn't belong to
-  // the current tenant, exactly as if it didn't exist at all â€” this also
+  // the current tenant, exactly as if it didn't exist at all — this also
   // prevents leaking the "this course exists but isn't yours" signal.
   findById(id: string, tenantId?: string) {
     return this.prisma.course.findFirst({
@@ -121,12 +121,12 @@ export class CoursesRepository {
   // BE-C04 FIX: update/delete/updateStatus take an optional tenantId and
   // put it directly in the WHERE clause. If an admin passes a course id
   // belonging to a different tenant, Prisma throws P2025 (record not
-  // found) instead of silently updating/deleting it â€” we don't rely on a
+  // found) instead of silently updating/deleting it — we don't rely on a
   // logical check performed after the fetch.
   //
   // T-02 FIX: `videoUrl` was silently dropped here. The function
   // destructured only a fixed subset of fields out of `data` and built
-  // the Prisma `data` payload from that subset â€” videoUrl was never
+  // the Prisma `data` payload from that subset — videoUrl was never
   // included in either the destructure or the payload, so any video URL
   // sent by the frontend never reached the database, even though it made
   // it all the way through the controller and service untouched. Fixed

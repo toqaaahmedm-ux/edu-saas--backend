@@ -13,10 +13,10 @@ const mockEnrollmentsService = {
 
 const mockSessionAuthGuard = { canActivate: jest.fn(() => true) };
 
-// ملحوظة: ده الـ object اللي الـ @GetUser() decorator هيرجعه فعلياً
-// في الـ production. في الـ unit test مفيش NestJS pipeline بيشغل
-// الديكوريتور، فبنحط القيمة دي يدوياً بدل mockReq.user وقت ما ننده
-// على الـ controller method مباشرة.
+// Note: this is the object the @GetUser() decorator actually returns
+// in production. In the unit test there's no NestJS pipeline running
+// the decorator, so we set this value manually as mockReq.user when
+// calling the controller method directly.
 const mockUser = { id: 'student-123', tenantId: 'tenant-123', role: 'STUDENT' };
 
 const mockEnrollment = {
