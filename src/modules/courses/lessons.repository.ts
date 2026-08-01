@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -100,6 +100,22 @@ export class LessonsRepository {
         lesson: { courseId },
       },
       select: { lessonId: true },
+    });
+  }
+
+  // --- video progress (resume-where-you-left-off) ---
+
+  findProgress(studentId: string, lessonId: string) {
+    return this.prisma.lessonProgress.findUnique({
+      where: { studentId_lessonId: { studentId, lessonId } },
+    });
+  }
+
+  upsertProgress(tenantId: string, studentId: string, lessonId: string, positionSeconds: number) {
+    return this.prisma.lessonProgress.upsert({
+      where: { studentId_lessonId: { studentId, lessonId } },
+      create: { tenantId, studentId, lessonId, positionSeconds },
+      update: { positionSeconds },
     });
   }
 }

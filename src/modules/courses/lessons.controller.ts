@@ -1,9 +1,10 @@
-﻿import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { LessonsService } from './lessons.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
+import { SaveProgressDto } from './dto/save-progress.dto';
 
 @Controller('courses/:courseId/lessons')
 export class LessonsController {
@@ -42,6 +43,26 @@ export class LessonsController {
     @GetUser() user: any,
   ) {
     return this.lessonsService.completeLesson(lessonId, user.id, user.tenantId);
+  }
+
+  // student saves their current video position — called on a debounced
+  // interval while watching, not on every timeupdate event
+  @Patch(':lessonId/progress')
+  saveProgress(
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+    @Body() body: SaveProgressDto,
+  ) {
+    return this.lessonsService.saveProgress(lessonId, user.id, user.tenantId, body.positionSeconds);
+  }
+
+  // frontend calls this when the lesson loads, to know where to seek to
+  @Get(':lessonId/progress/me')
+  getProgress(
+    @Param('lessonId') lessonId: string,
+    @GetUser() user: any,
+  ) {
+    return this.lessonsService.getProgress(lessonId, user.id, user.tenantId);
   }
 
   @UseGuards(RolesGuard)
