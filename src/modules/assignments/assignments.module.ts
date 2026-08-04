@@ -8,6 +8,7 @@ import { GradesModule } from '../grades/grades.module';
 
 @Module({
   // so we can use CoursesService for the ownership check + GradesService for automatic recalculation
+  imports: [CoursesModule, PrismaModule, GradesModule],
   controllers: [AssignmentsController],
   providers: [AssignmentsService, AssignmentsRepository],
   exports: [AssignmentsService],
