@@ -13,7 +13,14 @@ export class TenantMiddleware implements NestMiddleware {
     const host = req.hostname;
     const parts = host.split('.');
 
-    if (parts.length >= 2 && parts[0] !== 'localhost' && parts[0] !== 'www') {
+    // An IPv4 host (e.g. the server's bare IP, or "localhost") is never a
+    // real subdomain. Without this check, a request hitting the backend
+    // by IP address would have its first octet ("18" in "18.194.88.98")
+    // misread as a subdomain slug and looked up against the Tenant table,
+    // which is never correct.
+    const isIpAddress = parts.every((p) => !isNaN(Number(p)));
+
+    if (parts.length >= 2 && !isIpAddress && parts[0] !== 'localhost' && parts[0] !== 'www') {
       const subdomain = parts[0];
       const tenant = await this.prisma.tenant.findUnique({ where: { subdomain } });
 
@@ -45,6 +52,7 @@ export class TenantMiddleware implements NestMiddleware {
     }
 
     // Priority 3: no subdomain match, no header — treat as a SuperAdmin request.
+    // tenantId = null lets the request bypass row-level tenant scoping (RLS).
     (req as any).tenantId = null;
     tenantContext.run({ tenantId: null }, () => next());
   }
