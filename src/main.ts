@@ -44,8 +44,9 @@ async function bootstrap() {
       // from these origins on pages that use apiClient instead of the
       // Next.js proxy routes.
       const isLocalSubdomain = /^http:\/\/[a-z0-9-]+\.localhost:3000$/.test(origin);
+      const isProdNipIoSubdomain = /^https?:\/\/[a-z0-9-]+\.\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.nip\.io$/.test(origin);
 
-      if (allowedExact.includes(origin) || isLocalSubdomain) {
+      if (allowedExact.includes(origin) || isLocalSubdomain || isProdNipIoSubdomain) {
         return callback(null, true);
       }
 
