@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -63,6 +63,7 @@ export class UsersController {
 
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
+  @AuditAction('USER_DELETED')
   @Delete('admin/:id')
   delete(
     @Param('id') id: string,

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
-import { welcomeEmailTemplate, passwordResetEmailTemplate } from './templates';
+import { welcomeEmailTemplate, passwordResetEmailTemplate, emailVerificationTemplate } from './templates';
 
 interface MailJob {
   to: string;
@@ -13,10 +13,10 @@ interface MailJob {
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = [5000, 10000, 20000]; // 5s, 10s, 20s
 
-// Simple in-process queue with retry — no Redis/BullMQ dependency needed
+// Simple in-process queue with retry â€” no Redis/BullMQ dependency needed
 // at this stage. Jobs are fire-and-forget from the caller's perspective;
 // this class owns retry scheduling internally. If the process restarts,
-// in-flight jobs are lost — acceptable for transactional emails right now.
+// in-flight jobs are lost â€” acceptable for transactional emails right now.
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -51,7 +51,7 @@ export class MailService {
 
   async sendTenantWelcome(to: string, params: { tenantName: string; ownerName: string; loginUrl: string }) {
     const { subject, html } = welcomeEmailTemplate(params);
-    this.enqueue({ to, subject, html, attempt: 1 }); // not awaited — fire and forget
+    this.enqueue({ to, subject, html, attempt: 1 }); // not awaited â€” fire and forget
   }
 
   async sendPasswordReset(to: string, params: { name: string; resetUrl: string }) {
@@ -77,6 +77,11 @@ export class MailService {
         <p><a href="${params.loginUrl}">Log in here</a></p>
       </div>
     `;
+    this.enqueue({ to, subject, html, attempt: 1 });
+  }
+
+  async sendEmailVerification(to: string, params: { name: string; verifyUrl: string }) {
+    const { subject, html } = emailVerificationTemplate(params);
     this.enqueue({ to, subject, html, attempt: 1 });
   }
 }
