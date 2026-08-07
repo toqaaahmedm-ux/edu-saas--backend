@@ -5,6 +5,7 @@
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
+import { TenantId } from '../../common/decorators/tenant-id.decorator';
 import { Role } from '@prisma/client';
 import { ApiHeader, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -42,7 +43,7 @@ export class AuthController {
   @ApiHeader({ name: 'x-tenant-id', required: true, description: 'Tenant UUID' })
   async register(
     @Body() dto: RegisterDto,
-    @Headers('x-tenant-id') tenantId: string,
+    @TenantId() tenantId: string | null,
   ) {
     if (!tenantId) throw new UnauthorizedException('Tenant not specified');
     return this.authService.register(dto, tenantId);
@@ -59,7 +60,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Login — provide x-tenant-id for tenant users; leave empty for SuperAdmin' })
   async login(
     @Body() dto: LoginDto,
-    @Headers('x-tenant-id') tenantId: string,
+    @TenantId() tenantId: string | null,
     @Res() res: Response,
   ) {
     const result = tenantId
