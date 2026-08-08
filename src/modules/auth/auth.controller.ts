@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller, Post, Get, Body, Param,
   Req, Res, UnauthorizedException, Headers, UseGuards,
 } from '@nestjs/common';
@@ -12,6 +12,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuditAction } from '../../common/interceptors/audit.interceptor';
 import type { Request, Response } from 'express';
@@ -144,5 +146,21 @@ export class AuthController {
   @AuditAction('PASSWORD_RESET_COMPLETED')
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  // Email infrastructure fix: email verification is informational only -
+  // it does not block login (see the "optional verification" decision).
+  @Public()
+  @Post('verify-email')
+  @AuditAction('EMAIL_VERIFIED')
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Public()
+  @Post('resend-verification')
+  @AuditAction('EMAIL_VERIFICATION_RESENT')
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerificationEmail(dto.email);
   }
 }

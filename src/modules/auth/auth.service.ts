@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   UnauthorizedException,
   ConflictException,
@@ -69,7 +69,7 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    // FIX (Admin Report Bug #1): role now actually gets saved — previously
+    // FIX (Admin Report Bug #1): role now actually gets saved Ã¢â‚¬â€ previously
     // it was accepted by the DTO (after this same fix) but never passed to
     // Prisma, so every registration silently became a STUDENT no matter
     // what was requested.
@@ -77,7 +77,7 @@ export class AuthService {
     // FIX (Admin Report Bug #2): a self-registered TEACHER starts PENDING
     // and cannot log in until an admin approves them (see login() below and
     // users.service.ts for the approval endpoint). STUDENT accounts need
-    // no approval and go straight to ACTIVE — the schema default already
+    // no approval and go straight to ACTIVE Ã¢â‚¬â€ the schema default already
     // covers that, so we only need to special-case TEACHER here.
     const role = dto.role ?? 'STUDENT';
     const status = role === 'TEACHER' ? 'PENDING' : 'ACTIVE';
@@ -113,6 +113,16 @@ export class AuthService {
       }
     }
 
+    // Email infrastructure fix: send a verification email on signup.
+    // Wrapped in its own try/catch so a mail provider hiccup never
+    // blocks registration itself.
+    try {
+      await this.issueAndSendVerificationEmail(user.id, user.email, user.name);
+    } catch (err) {
+      // registration must succeed even if the verification email fails to send
+      console.error('Failed to send verification email during registration:', err);
+    }
+
     return {
       id: user.id,
       name: user.name,
@@ -131,7 +141,7 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.hashedPassword);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
-    // FIX (Admin Report Bug #2): this is the actual gate — without it, a
+    // FIX (Admin Report Bug #2): this is the actual gate Ã¢â‚¬â€ without it, a
     // PENDING teacher could already log in immediately after registering
     // even though role/status were being saved correctly, because nothing
     // ever checked status at login time.
@@ -225,7 +235,7 @@ export class AuthService {
 
   // SuperAdmin impersonation: issues a short-lived token that lets the
   // caller act as a specific tenant admin for support/debugging purposes.
-  // Deliberately separate from the normal login flow — this never checks
+  // Deliberately separate from the normal login flow Ã¢â‚¬â€ this never checks
   // a password, only that the caller is already an authenticated
   // SUPER_ADMIN (enforced by the guard on the controller endpoint).
   //
@@ -248,7 +258,7 @@ export class AuthService {
       impersonatedBy: superAdminId,
     };
 
-    // Short-lived on purpose (30 min) — this is a support tool, not a
+    // Short-lived on purpose (30 min) Ã¢â‚¬â€ this is a support tool, not a
     // regular session, so it shouldn't linger if someone forgets to exit.
     const accessToken = this.jwtService.sign(payload, { expiresIn: '30m' });
 
@@ -328,5 +338,61 @@ export class AuthService {
     ]);
 
     return { message: 'Password reset successfully' };
+  }
+
+  // Email verification: issues a 24h token and emails a verify link.
+  // Shared by register() (auto-send on signup) and the resend endpoint.
+  private async issueAndSendVerificationEmail(userId: string, email: string, name: string) {
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await this.prisma.verificationToken.create({
+      data: { userId, token, type: 'EMAIL_VERIFICATION', expiresAt },
+    });
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    await this.mailService.sendEmailVerification(email, {
+      name,
+      verifyUrl: `${frontendUrl}/verify-email?token=${token}`,
+    });
+  }
+
+  // Verification is informational only - it does not block login or
+  // any other action (see the "email verification is optional" decision).
+  async verifyEmail(token: string) {
+    const record = await this.prisma.verificationToken.findUnique({ where: { token } });
+
+    if (
+      !record ||
+      record.type !== 'EMAIL_VERIFICATION' ||
+      record.usedAt ||
+      record.expiresAt < new Date()
+    ) {
+      throw new UnauthorizedException('Invalid or expired verification link');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { emailVerified: true },
+      }),
+      this.prisma.verificationToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    return { message: 'Email verified successfully' };
+  }
+
+  async resendVerificationEmail(email: string) {
+    const user = await this.prisma.user.findFirst({ where: { email } });
+    if (user && !user.emailVerified) {
+      await this.issueAndSendVerificationEmail(user.id, user.email, user.name);
+    }
+
+    // Same non-enumerating response style as forgotPassword() - don't reveal
+    // whether the email exists or is already verified.
+    return { message: 'If that email exists and is not verified, a new link has been sent.' };
   }
 }
