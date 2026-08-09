@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
 import { ApiHeader, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -51,6 +52,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // SEC-02: stricter than the global 100/min, to make login brute-force impractical
   @Post('login')
   @AuditAction('USER_LOGIN')
   @ApiHeader({
@@ -118,6 +120,7 @@ export class AuthController {
   // BE-L04: GET /auth/me removed from here — the richer route (returns from DB)
   // lives in UsersController at GET /me
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // SEC-02: stricter than the global 100/min, to make login brute-force impractical
   @Post('superadmin/login')
   @AuditAction('SUPERADMIN_LOGIN')
   @ApiOperation({ summary: 'SuperAdmin login — بدون x-tenant-id' })

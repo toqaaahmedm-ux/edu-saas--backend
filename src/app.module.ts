@@ -66,6 +66,7 @@ import { AppService } from './app.service';
       },
     }),
     ThrottlerModule.forRoot([{
+      name: 'default', // SEC-02: explicit name so per-route @Throttle({ default: {...} }) overrides actually match this throttler
       ttl: 60000,
       limit: 100,
     }]),
