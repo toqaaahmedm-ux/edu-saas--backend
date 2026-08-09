@@ -32,7 +32,7 @@ const REFRESH_COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: '/auth/refresh',
+  // FIX (AUTH-09): the global prefix ('api') means the real refresh\n  // endpoint is /api/auth/refresh, but this cookie was scoped to\n  // /auth/refresh -- a path the browser never actually hits, so it\n  // never sent the cookie back and refresh always failed with\n  // 'No refresh token'. Scoping it to the real endpoint fixes that.\n  path: '/api/auth/refresh',
 };
 
 @ApiTags('Auth')
@@ -98,7 +98,7 @@ export class AuthController {
   @AuditAction('USER_LOGOUT')
   async logout(@Res() res: Response) {
     res.clearCookie('session-token');
-    res.clearCookie('refresh-token', { path: '/auth/refresh' });
+    res.clearCookie('refresh-token', { path: '/api/auth/refresh' });
     return res.json({ success: true });
   }
 // Returns the token directly instead of setting a cookie — the caller
