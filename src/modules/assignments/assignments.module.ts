@@ -5,10 +5,11 @@ import { AssignmentsRepository } from './assignments.repository';
 import { CoursesModule } from '../courses/courses.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { GradesModule } from '../grades/grades.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   // so we can use CoursesService for the ownership check + GradesService for automatic recalculation
-  imports: [CoursesModule, PrismaModule, GradesModule],
+  imports: [CoursesModule, PrismaModule, GradesModule, NotificationsModule],
   controllers: [AssignmentsController],
   providers: [AssignmentsService, AssignmentsRepository],
   exports: [AssignmentsService],

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -65,9 +65,20 @@ export class QuizService {
     }));
   }
 
-  async getQuizWithQuestions(quizId: string, tenantId: string, studentId: string) {
+  async getQuizWithQuestions(quizId: string, tenantId: string, studentId: string, userRole?: string) { // defect #5 fix
     const quiz = await this.quizRepository.findByIdWithQuestions(quizId, tenantId);
     if (!quiz) throw new NotFoundException('Quiz not found');
+
+    if (userRole === 'TEACHER' || userRole === 'ADMIN') {
+      const course = await this.prisma.course.findUnique({
+        where: { id: quiz.courseId },
+        select: { instructorId: true },
+      });
+      if (userRole === 'ADMIN' || course?.instructorId === studentId) {
+        const shuffled = [...quiz.questions].sort(() => Math.random() - 0.5);
+        return { ...quiz, questions: shuffled, availability: this.getAvailability(quiz) };
+      }
+    }
 
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId, courseId: quiz.courseId } },

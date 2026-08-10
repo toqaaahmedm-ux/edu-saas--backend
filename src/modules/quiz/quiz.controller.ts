@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -84,7 +84,7 @@ export class QuizController {
 
   @Get(':id')
   getQuiz(@Param('id') id: string, @GetUser() user: any) {
-    return this.quizService.getQuizWithQuestions(id, user.tenantId, user.id);
+    return this.quizService.getQuizWithQuestions(id, user.tenantId, user.id, user.role);
   }
 
   @Post(':id/start')

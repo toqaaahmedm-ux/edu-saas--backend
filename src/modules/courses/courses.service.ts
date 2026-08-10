@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -261,6 +261,7 @@ export class CoursesService {
       duration?: number;
       order?: number;
       availableAt?: string;
+      moduleId?: string; // defect #4 fix: was accepted by nothing and silently dropped
     },
   ) {
     const course = await this.findById(courseId, tenantId);
@@ -287,6 +288,7 @@ export class CoursesService {
         order,
         courseId,
         tenantId,
+        moduleId: data.moduleId ?? null, // defect #4 fix
         availableAt: data.availableAt ? new Date(data.availableAt) : null,
       },
     });

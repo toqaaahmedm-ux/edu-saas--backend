@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AssignmentsRepository } from './assignments.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CoursesService } from '../courses/courses.service';
 import { GradesService } from '../grades/grades.service';
 
@@ -109,7 +110,7 @@ export class AssignmentsService {
     return { message: 'Assignment deleted successfully' };
   }
 
-  // ─── Submissions ──────────────────────────────────────────────────────────
+  // ---- Submissions ---- 
 
   async getSubmissions(
     assignmentId: string,
@@ -185,7 +186,7 @@ export class AssignmentsService {
 
     const graded = await this.assignmentsRepository.gradeSubmission(submissionId, data, tenantId);
 
-    // auto-recompute the student's final course grade right after grading —
+    // auto-recompute the student's final course grade right after grading --
     // this is what used to require a manual "recompute" button click.
     // Wrapped in try/catch so a grade-calc hiccup never blocks the actual
     // grading action from succeeding (the teacher's work is already saved
@@ -193,7 +194,7 @@ export class AssignmentsService {
     try {
       await this.gradesService.recompute(course.id, submission.studentId, tenantId);
     } catch (err) {
-      // swallow — grading itself succeeded, recompute can be retried
+      // swallow -- grading itself succeeded, recompute can be retried
       // manually via POST /courses/:courseId/grades/recompute/:studentId
     }
 

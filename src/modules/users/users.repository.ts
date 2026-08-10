@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Role } from '@prisma/client';
 
@@ -18,6 +18,7 @@ const safeUserSelect = {
   name: true,
   email: true,
   role: true,
+  status: true, // defect #2 fix: needed by the admin user list UI
   avatar: true,
   createdAt: true,
   updatedAt: true,
