@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { MailService } from '../mail/mail.service';
@@ -92,7 +92,20 @@ export class AdminService {
       return tx.tenant.update({
         where: { id: newTenant.id },
         data: { ownerUserId: owner.id },
-        include: { plan: { select: { id: true, name: true } }, owner: true },
+        include: {
+          plan: { select: { id: true, name: true } },
+          // SEC fix: explicit select instead of owner: true, to exclude hashedPassword
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              status: true,
+              createdAt: true,
+            },
+          },
+        },
       });
     });
 
