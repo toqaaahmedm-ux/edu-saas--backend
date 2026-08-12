@@ -56,3 +56,10 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# QA testing artifacts (local only - contain tokens/credentials)
+*-cookies.txt
+login*.json
+certificate-test*.pdf
+check-enrollment.js
+*.bak_before_dedup
