@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -47,7 +47,7 @@ export class GradesController {
     @Param('studentId') studentId: string,
     @GetUser() user: any,
   ) {
-    return this.gradesService.recompute(courseId, studentId, user.tenantId);
+    return this.gradesService.recompute(courseId, studentId, user.tenantId, user.id, user.role);
   }
 
   @UseGuards(RolesGuard)

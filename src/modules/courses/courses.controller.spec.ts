@@ -70,7 +70,7 @@ describe('CoursesController', () => {
       mockCoursesService.findAll.mockResolvedValue({ courses: [mockCourse], meta: { total: 1 } });
       const result = await controller.findAll(mockReqWithTenant, '1', '10', undefined, undefined);
       expect(result.courses).toHaveLength(1);
-      expect(mockCoursesService.findAll).toHaveBeenCalledWith(TENANT_ID, 1, 10, undefined, undefined);
+      expect(mockCoursesService.findAll).toHaveBeenCalledWith(TENANT_ID, 1, 10, undefined, undefined, undefined);
     });
 
     // findAll isn't async — when the tenant context is missing it throws the error directly

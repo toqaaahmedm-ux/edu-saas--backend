@@ -1,7 +1,8 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { CoursesService } from './courses.service';
 import { CoursesRepository } from './courses.repository';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { CourseStatus } from '@prisma/client';
 
@@ -27,6 +28,15 @@ const mockPrismaService = {
   quizAttempt: {
     findMany: jest.fn(),
   },
+  course: {
+    count: jest.fn(),
+    create: jest.fn(),
+  },
+  $transaction: jest.fn((callback) => callback(mockPrismaService)),
+};
+
+const mockBillingService = {
+  getTenantSubscription: jest.fn(),
 };
 
 const TENANT_ID = 'tenant-123';
@@ -53,6 +63,7 @@ describe('CoursesService', () => {
         CoursesService,
         { provide: CoursesRepository, useValue: mockCoursesRepository },
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: BillingService, useValue: mockBillingService },
       ],
     }).compile();
 
@@ -86,9 +97,6 @@ describe('CoursesService', () => {
       await expect(service.findById('not-found', TENANT_ID)).rejects.toThrow(NotFoundException);
     });
 
-    // BE-C03: if the course does exist but belongs to a different tenant, the repository
-    // (filtered by tenantId in the WHERE) returns null, so the service throws the same
-    // NotFoundException — without revealing that the course exists at all for another tenant.
     it('يرمي NotFoundException لو الكورس تبع مستأجر تاني', async () => {
       mockCoursesRepository.findById.mockResolvedValue(null);
       await expect(service.findById('course-123', 'other-tenant')).rejects.toThrow(NotFoundException);
@@ -97,8 +105,12 @@ describe('CoursesService', () => {
   });
 
   describe('create', () => {
+    beforeEach(() => {
+      mockBillingService.getTenantSubscription.mockResolvedValue(null);
+    });
+
     it('ينشئ كورس بنجاح', async () => {
-      mockCoursesRepository.create.mockResolvedValue(mockCourse);
+      mockPrismaService.course.create.mockResolvedValue(mockCourse);
       const result = await service.create({
         tenantId: TENANT_ID,
         title: 'NestJS Course',
@@ -151,8 +163,6 @@ describe('CoursesService', () => {
         .rejects.toThrow(BadRequestException);
     });
 
-    // BE-C04: if the admin sends a tenantId different from the course's tenant, findById
-    // throws NotFoundException before we even get to the ownership check.
     it('يرمي NotFoundException لو الكورس تبع مستأجر تاني', async () => {
       mockCoursesRepository.findById.mockResolvedValue(null);
       await expect(service.update('course-123', 'admin-999', 'ADMIN', 'other-tenant', { title: 'x' }))

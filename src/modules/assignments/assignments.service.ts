@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -192,7 +192,7 @@ export class AssignmentsService {
     // grading action from succeeding (the teacher's work is already saved
     // by the line above).
     try {
-      await this.gradesService.recompute(course.id, submission.studentId, tenantId);
+      await this.gradesService.recompute(course.id, submission.studentId, tenantId, userId, userRole);
     } catch (err) {
       // swallow -- grading itself succeeded, recompute can be retried
       // manually via POST /courses/:courseId/grades/recompute/:studentId

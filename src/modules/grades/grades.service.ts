@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -8,7 +8,7 @@ import { CoursesService } from '../courses/courses.service';
 
 // standard percentage -> letter mapping, used unless the tenant picks
 // something else via Tenant.gradeScale later (CUSTOM scales aren't
-// implemented yet — falls back to this table)
+// implemented yet â€” falls back to this table)
 const LETTER_SCALE: { min: number; letter: string; gpa: number }[] = [
   { min: 93, letter: 'A', gpa: 4.0 },
   { min: 90, letter: 'A-', gpa: 3.7 },
@@ -47,11 +47,15 @@ export class GradesService {
     return course;
   }
 
-  // weighted 40% quizzes / 60% assignments when both exist — assignments
+  // weighted 40% quizzes / 60% assignments when both exist â€” assignments
   // count more since they're usually the bigger, graded-by-hand work.
   // falls back to whichever category actually has data so a course with
   // quizzes but no assignments yet (or vice versa) still gets a real grade.
-  async recompute(courseId: string, studentId: string, tenantId: string) {
+  async recompute(courseId: string, studentId: string, tenantId: string, userId: string, userRole: string) {
+    const course = await this.coursesService.findById(courseId, tenantId);
+    if (userRole !== 'ADMIN' && course.instructorId !== userId) {
+      throw new ForbiddenException('You do not own this course');
+    }
     const [tenant, quizScores, assignmentScores] = await Promise.all([
       this.gradesRepository.getTenant(tenantId),
       this.gradesRepository.getQuizScores(courseId, studentId, tenantId),
@@ -89,7 +93,7 @@ export class GradesService {
       courseId,
       score: finalScore,
       letterGrade: letter,
-      // GPA only makes sense for university-type tenants — schools/tutors
+      // GPA only makes sense for university-type tenants â€” schools/tutors
       // use the letter grade or raw percentage instead
       gpa: tenant?.type === 'UNIVERSITY' ? gpa : null,
     });
