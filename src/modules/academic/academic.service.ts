@@ -1,14 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // These 4 models (AcademicYear, Semester, GradeLevel, ClassSection) are
-// simple admin-managed lookup tables — same tenantId-scoped CRUD shape
+// simple admin-managed lookup tables â€” same tenantId-scoped CRUD shape
 // four times over. One service instead of four nearly-identical files.
 @Injectable()
 export class AcademicService {
   constructor(private prisma: PrismaService) {}
 
-  // ─── Academic Years ───────────────────────────────────────────────────
+  // â”€â”€â”€ Academic Years â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   getAcademicYears(tenantId: string) {
     return this.prisma.academicYear.findMany({
@@ -35,6 +35,20 @@ export class AcademicService {
 
   async updateAcademicYear(id: string, tenantId: string, data: any) {
     await this.assertExists('academicYear', id, tenantId);
+    if (data.isActive === true) {
+      return this.prisma.$transaction(async (tx) => {
+        await tx.academicYear.updateMany({ where: { tenantId, id: { not: id } }, data: { isActive: false } });
+        return tx.academicYear.update({
+          where: { id, tenantId },
+          data: {
+            ...(data.name && { name: data.name }),
+            ...(data.startDate && { startDate: new Date(data.startDate) }),
+            ...(data.endDate && { endDate: new Date(data.endDate) }),
+            isActive: true,
+          },
+        });
+      });
+    }
     return this.prisma.academicYear.update({
       where: { id, tenantId },
       data: {
@@ -52,7 +66,7 @@ export class AcademicService {
     return { message: 'Academic year deleted' };
   }
 
-  // ─── Semesters ────────────────────────────────────────────────────────
+  // â”€â”€â”€ Semesters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   getSemesters(tenantId: string) {
     return this.prisma.semester.findMany({
@@ -82,6 +96,21 @@ export class AcademicService {
 
   async updateSemester(id: string, tenantId: string, data: any) {
     await this.assertExists('semester', id, tenantId);
+    if (data.isActive === true) {
+      const current = await this.prisma.semester.findUnique({ where: { id } });
+      return this.prisma.$transaction(async (tx) => {
+        await tx.semester.updateMany({ where: { tenantId, academicYearId: current.academicYearId, id: { not: id } }, data: { isActive: false } });
+        return tx.semester.update({
+          where: { id, tenantId },
+          data: {
+            ...(data.name && { name: data.name }),
+            ...(data.startDate && { startDate: new Date(data.startDate) }),
+            ...(data.endDate && { endDate: new Date(data.endDate) }),
+            isActive: true,
+          },
+        });
+      });
+    }
     return this.prisma.semester.update({
       where: { id, tenantId },
       data: {
@@ -99,7 +128,7 @@ export class AcademicService {
     return { message: 'Semester deleted' };
   }
 
-  // ─── Grade Levels ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Grade Levels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   getGradeLevels(tenantId: string) {
     return this.prisma.gradeLevel.findMany({
@@ -133,7 +162,7 @@ export class AcademicService {
     return { message: 'Grade level deleted' };
   }
 
-  // ─── Class Sections ───────────────────────────────────────────────────
+  // â”€â”€â”€ Class Sections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   getClassSections(tenantId: string) {
     return this.prisma.classSection.findMany({
@@ -187,3 +216,4 @@ export class AcademicService {
     return record;
   }
 }
+
