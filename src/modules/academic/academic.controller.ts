@@ -5,6 +5,7 @@ import {
   Patch,
   Delete,
   Param,
+  Query,
   Body,
   UseGuards,
 } from '@nestjs/common';
@@ -123,5 +124,36 @@ export class AcademicController {
   @AuditAction('CLASS_SECTION_DELETED')
   deleteClassSection(@Param('id') id: string, @GetUser() user: any) {
     return this.academicService.deleteClassSection(id, user.tenantId);
+  }
+
+  // ─── Class Sessions (Timetable/Schedule) ─────────────────────────────
+  // GET is open to STUDENT/TEACHER/ADMIN so the schedule renders for
+  // everyone; writes stay ADMIN-only like the rest of this controller.
+
+  @Roles(Role.STUDENT, Role.TEACHER, Role.ADMIN)
+  @Get('class-sessions')
+  getClassSessions(@GetUser() user: any, @Query('courseId') courseId?: string) {
+    return this.academicService.getClassSessions(user.tenantId, courseId);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post('class-sessions')
+  @AuditAction('CLASS_SESSION_CREATED')
+  createClassSession(@GetUser() user: any, @Body() body: any) {
+    return this.academicService.createClassSession(user.tenantId, body);
+  }
+
+  @Roles(Role.ADMIN)
+  @Patch('class-sessions/:id')
+  @AuditAction('CLASS_SESSION_UPDATED')
+  updateClassSession(@Param('id') id: string, @GetUser() user: any, @Body() body: any) {
+    return this.academicService.updateClassSession(id, user.tenantId, body);
+  }
+
+  @Roles(Role.ADMIN)
+  @Delete('class-sessions/:id')
+  @AuditAction('CLASS_SESSION_DELETED')
+  deleteClassSession2(@Param('id') id: string, @GetUser() user: any) {
+    return this.academicService.deleteClassSession(id, user.tenantId);
   }
 }

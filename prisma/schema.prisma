@@ -130,6 +130,7 @@ mediaAssets     MediaAsset[]
   semesters      Semester[]
   gradeLevels    GradeLevel[]
   classSections  ClassSection[]
+  classSessions  ClassSession[]
   modules        Module[]
   assignments    Assignment[]
   attendances    Attendance[]
@@ -382,6 +383,23 @@ model ClassSection {
 
 // ─── Course structure ────────────────────────────────────────────────────
 
+model ClassSession {
+  id          String   @id @default(uuid())
+  tenantId    String
+  courseId    String
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  room        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, dayOfWeek])
+}
+
 model Course {
   id           String       @id @default(uuid())
   tenantId     String
@@ -418,6 +436,8 @@ model Course {
   semester      Semester?      @relation(fields: [semesterId], references: [id])
   gradeLevel    GradeLevel?    @relation(fields: [gradeLevelId], references: [id])
   classSection  ClassSection?  @relation(fields: [classSectionId], references: [id])
+
+  classSessions ClassSession[]
 
   @@index([tenantId])
   @@index([tenantId, status])

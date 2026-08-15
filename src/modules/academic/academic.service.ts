@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // These 4 models (AcademicYear, Semester, GradeLevel, ClassSection) are
@@ -210,7 +210,58 @@ export class AcademicService {
 
   // shared existence + tenant-ownership check, used by every update/delete
   // above so a bad id gives a clean 404 instead of a raw Prisma P2025 error
-  private async assertExists(model: 'academicYear' | 'semester' | 'gradeLevel' | 'classSection', id: string, tenantId: string) {
+  // ─── Class Sessions (Timetable/Schedule) ─────────────────────────────
+
+  async getClassSessions(tenantId: string, courseId?: string) {
+    return this.prisma.classSession.findMany({
+      where: { tenantId, ...(courseId ? { courseId } : {}) },
+      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+    });
+  }
+
+  async createClassSession(
+    tenantId: string,
+    data: { courseId: string; dayOfWeek: number; startTime: string; endTime: string; room: string },
+  ) {
+    if (!data.courseId) throw new BadRequestException('courseId is required');
+    if (data.dayOfWeek === undefined || data.dayOfWeek < 0 || data.dayOfWeek > 6) {
+      throw new BadRequestException('dayOfWeek must be between 0 and 6');
+    }
+    if (!data.startTime) throw new BadRequestException('startTime is required');
+    if (!data.endTime) throw new BadRequestException('endTime is required');
+    if (!data.room?.trim()) throw new BadRequestException('room is required');
+    return this.prisma.classSession.create({
+      data: {
+        tenantId,
+        courseId: data.courseId,
+        dayOfWeek: data.dayOfWeek,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        room: data.room,
+      },
+    });
+  }
+
+  async updateClassSession(id: string, tenantId: string, data: any) {
+    await this.assertExists('classSession', id, tenantId);
+    return this.prisma.classSession.update({
+      where: { id, tenantId },
+      data: {
+        ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
+        ...(data.startTime && { startTime: data.startTime }),
+        ...(data.endTime && { endTime: data.endTime }),
+        ...(data.room && { room: data.room }),
+      },
+    });
+  }
+
+  async deleteClassSession(id: string, tenantId: string) {
+    await this.assertExists('classSession', id, tenantId);
+    await this.prisma.classSession.delete({ where: { id, tenantId } });
+    return { message: 'Class session deleted' };
+  }
+
+  private async assertExists(model: 'academicYear' | 'semester' | 'gradeLevel' | 'classSection' | 'classSession', id: string, tenantId: string) {
     const record = await (this.prisma[model] as any).findFirst({ where: { id, tenantId } });
     if (!record) throw new NotFoundException('Record not found');
     return record;
