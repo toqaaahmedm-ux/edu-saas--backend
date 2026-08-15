@@ -1,7 +1,10 @@
-import { Controller, Get, Patch, Param, UseGuards } from '@nestjs/common';
+﻿import { Controller, Get, Post, Patch, Param, Body, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { GetUser } from '../../common/decorators/get-user.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Notifications')
@@ -10,6 +13,21 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 @UseGuards(SessionAuthGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('broadcast')
+  broadcast(
+    @GetUser() user: any,
+    @Body() body: { title: string; message: string; type?: string },
+  ) {
+    return this.notificationsService.broadcastToTenant({
+      tenantId: user.tenantId,
+      title: body.title,
+      message: body.message,
+      type: body.type ?? 'ANNOUNCEMENT',
+    });
+  }
 
   @Get()
   getMyNotifications(@GetUser('id') userId: string) {
