@@ -131,6 +131,7 @@ mediaAssets     MediaAsset[]
   gradeLevels    GradeLevel[]
   classSections  ClassSection[]
   classSessions  ClassSession[]
+  liveSessions   LiveSession[]
   modules        Module[]
   assignments    Assignment[]
   attendances    Attendance[]
@@ -400,6 +401,32 @@ model ClassSession {
   @@index([tenantId, dayOfWeek])
 }
 
+model LiveSession {
+  id               String            @id @default(uuid())
+  tenantId         String
+  courseId         String
+  title            String
+  meetingUrl       String
+  scheduledAt      DateTime
+  durationMinutes  Int               @default(60)
+  status           LiveSessionStatus @default(SCHEDULED)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, scheduledAt])
+  @@index([courseId])
+}
+
+enum LiveSessionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
 model Course {
   id           String       @id @default(uuid())
   tenantId     String
@@ -438,6 +465,7 @@ model Course {
   classSection  ClassSection?  @relation(fields: [classSectionId], references: [id])
 
   classSessions ClassSession[]
+  liveSessions  LiveSession[]
 
   @@index([tenantId])
   @@index([tenantId, status])

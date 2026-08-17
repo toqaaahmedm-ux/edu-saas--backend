@@ -28,6 +28,7 @@ import { GradesModule } from './modules/grades/grades.module';
 // NEW: admin-managed academic structure lookups (years, semesters, grade levels, sections)
 import { AcademicModule } from './modules/academic/academic.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
+import { LiveSessionsModule } from './modules/live-sessions/live-sessions.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 @Module({
@@ -91,6 +92,7 @@ import { AppService } from './app.service';
     GradesModule,
     AcademicModule,
     TenantsModule,
+    LiveSessionsModule,
   ],
   providers: [
     AppService,
