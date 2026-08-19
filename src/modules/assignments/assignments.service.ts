@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -15,6 +15,7 @@ export class AssignmentsService {
     private readonly assignmentsRepository: AssignmentsRepository,
     private readonly coursesService: CoursesService,
     private readonly gradesService: GradesService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private async assertCourseOwnership(
@@ -154,13 +155,31 @@ export class AssignmentsService {
       throw new BadRequestException('The due date for this assignment has passed');
     }
 
-    return this.assignmentsRepository.upsertSubmission({
+    const submission = await this.assignmentsRepository.upsertSubmission({
       tenantId,
       assignmentId,
       studentId,
       fileUrl: data.fileUrl,
       textContent: data.textContent,
     });
+
+    // Notify the course instructor that a student submitted work.
+    // Wrapped in try/catch so a notification hiccup never blocks the
+    // actual submission from succeeding (already saved by the line above).
+    try {
+      const course = await this.coursesService.findById(assignment.courseId, tenantId);
+      await this.notificationsService.createNotification({
+        userId: course.instructorId,
+        tenantId,
+        title: 'New assignment submission',
+        message: `A student submitted "${assignment.title}"`,
+        type: 'ASSIGNMENT_SUBMITTED',
+      });
+    } catch (err) {
+      // swallow -- submission itself succeeded, notification is best-effort
+    }
+
+    return submission;
   }
 
   async grade(
@@ -196,6 +215,20 @@ export class AssignmentsService {
     } catch (err) {
       // swallow -- grading itself succeeded, recompute can be retried
       // manually via POST /courses/:courseId/grades/recompute/:studentId
+    }
+
+    // Notify the student that their assignment has been graded.
+    // Also best-effort: never block a successful grading action.
+    try {
+      await this.notificationsService.createNotification({
+        userId: submission.studentId,
+        tenantId,
+        title: 'Assignment graded',
+        message: `Your submission for "${assignment.title}" scored ${data.score}/${assignment.maxScore}`,
+        type: 'ASSIGNMENT_GRADED',
+      });
+    } catch (err) {
+      // swallow -- grading itself succeeded, notification is best-effort
     }
 
     return graded;
