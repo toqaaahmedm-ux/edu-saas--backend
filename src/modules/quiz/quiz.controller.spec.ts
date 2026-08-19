@@ -1,3 +1,4 @@
+jest.mock('puppeteer', () => ({}));
 import { Test, TestingModule } from '@nestjs/testing';
 import { QuizController } from './quiz.controller';
 import { QuizService } from './quiz.service';
@@ -50,7 +51,7 @@ describe('QuizController', () => {
       service.getAllQuizzes.mockResolvedValue([mockQuiz]);
       const result = await controller.getAllQuizzes(mockUser);
       expect(result).toEqual([mockQuiz]);
-      expect(service.getAllQuizzes).toHaveBeenCalledWith('tenant-123');
+      expect(service.getAllQuizzes).toHaveBeenCalledWith('tenant-123', 'student-123', undefined);
     });
 
     it('يرجع array فاضية لو مفيش كويزات', async () => {
@@ -66,7 +67,7 @@ describe('QuizController', () => {
       const result = await controller.getQuiz('quiz-123', mockUser);
       expect(result).toEqual(mockQuiz);
       // make sure tenantId was sent too (multi-tenant isolation fix)
-      expect(service.getQuizWithQuestions).toHaveBeenCalledWith('quiz-123', mockUser.tenantId);
+      expect(service.getQuizWithQuestions).toHaveBeenCalledWith('quiz-123', mockUser.tenantId, mockUser.id, mockUser.role);
     });
 
     it('يرمي NotFoundException لو الكويز مش موجود', async () => {

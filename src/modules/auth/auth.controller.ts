@@ -32,7 +32,12 @@ const REFRESH_COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  // FIX (AUTH-09): the global prefix ('api') means the real refresh\n  // endpoint is /api/auth/refresh, but this cookie was scoped to\n  // /auth/refresh -- a path the browser never actually hits, so it\n  // never sent the cookie back and refresh always failed with\n  // 'No refresh token'. Scoping it to the real endpoint fixes that.\n  path: '/api/auth/refresh',
+  // FIX (AUTH-09): the global prefix ('api') means the real refresh
+  // endpoint is /api/auth/refresh, but this cookie was scoped to
+  // /auth/refresh -- a path the browser never actually hits, so it
+  // never sent the cookie back and refresh always failed with
+  // 'No refresh token'. Scoping it to the real endpoint fixes that.
+  path: '/api/auth/refresh',
 };
 
 @ApiTags('Auth')

@@ -1,3 +1,4 @@
+jest.mock('puppeteer', () => ({}));
 import { Test, TestingModule } from '@nestjs/testing';
 import { CertificatesController } from './certificates.controller';
 import { CertificatesService } from './certificates.service';

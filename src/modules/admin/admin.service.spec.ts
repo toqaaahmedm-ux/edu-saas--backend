@@ -5,6 +5,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { TenantStatus, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { BillingService } from '../billing/billing.service';
+import { MailService } from '../mail/mail.service';
 jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed_owner_password'),
 }));
@@ -71,6 +72,7 @@ describe('AdminService', () => {
         AdminService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: BillingService, useValue: mockBillingService },
+        { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
 
@@ -84,6 +86,16 @@ describe('AdminService', () => {
 
   const mockBillingService = {
     assignPlanToTenant: jest.fn(),
+  };
+
+  // new -- AdminService now uses MailService to send the tenant-welcome
+  // email right after createTenant(); tests don't exercise real mail
+  // sending so every method is just a jest.fn() stub.
+  const mockMailService = {
+    sendTenantWelcome: jest.fn().mockResolvedValue(undefined),
+    sendPasswordReset: jest.fn().mockResolvedValue(undefined),
+    sendUserInvite: jest.fn().mockResolvedValue(undefined),
+    sendEmailVerification: jest.fn().mockResolvedValue(undefined),
   };
   
   // ── createTenant (SA-C01 fix) ────────────────────────────────────────────

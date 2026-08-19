@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { UsersRepository } from './users.repository';
+import { PrismaService } from '../../prisma/prisma.service';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
@@ -16,6 +17,14 @@ const mockUsersRepository = {
   countByRole: jest.fn(),
 };
 
+const mockPrismaService = {
+  user: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+};
+
 jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
   hash: jest.fn().mockResolvedValue('new_hashed_password'),
@@ -23,6 +32,7 @@ jest.mock('bcryptjs', () => ({
 
 const mockUser = {
   id: 'user-123',
+  tenantId: 'tenant-123',
   name: 'Omar Ali',
   email: 'omar@edusaas.com',
   role: Role.STUDENT,
@@ -40,6 +50,7 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: UsersRepository, useValue: mockUsersRepository },
+        { provide: PrismaService, useValue: mockPrismaService },
       ],
     }).compile();
 

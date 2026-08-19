@@ -63,3 +63,6 @@ login*.json
 certificate-test*.pdf
 check-enrollment.js
 *.bak_before_dedup
+*.bak*
+*_fail.txt
+test_output.txt

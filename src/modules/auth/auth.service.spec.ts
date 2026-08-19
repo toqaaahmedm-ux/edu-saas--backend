@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 
 // HIGH-13 FIX: bcryptjs uses an ES Module, so jest.spyOn can't redefine the
@@ -50,6 +51,12 @@ const mockPrismaService = {
     findFirst: jest.fn(),
     create: jest.fn(),
   },
+  // new -- login() now also checks the tenant isn't SUSPENDED before
+  // issuing tokens; default to an active tenant so existing tests don't
+  // need to know about this unless they're specifically testing it.
+  tenant: {
+    findUnique: jest.fn(),
+  },
 };
 
 const mockJwtService = {
@@ -67,6 +74,16 @@ const mockConfigService = {
     };
     return config[key] ?? defaultValue;
   }),
+};
+
+// new -- AuthService now uses MailService to send the verification email
+// on registration (email verification flow); tests don't exercise real
+// mail sending so every method is just a jest.fn() stub.
+const mockMailService = {
+  sendTenantWelcome: jest.fn(),
+  sendPasswordReset: jest.fn(),
+  sendUserInvite: jest.fn(),
+  sendEmailVerification: jest.fn(),
 };
 
 const makeDto = (overrides = {}) => ({
@@ -87,6 +104,7 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
 
@@ -96,6 +114,9 @@ describe('AuthService', () => {
     // reset the default values after clearAllMocks
     (bcrypt.hash as jest.Mock).mockResolvedValue(HASHED);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    // default: tenant is active, so login() doesn't reject unless a test
+    // explicitly overrides this to simulate a suspended tenant.
+    mockPrismaService.tenant.findUnique.mockResolvedValue({ status: 'ACTIVE' });
     // signToken and signRefreshToken both use sign, just with different secrets,
     // so we return two different tokens based on the order they're called in the code:
     // signToken (access) is called first, then signRefreshToken (refresh).

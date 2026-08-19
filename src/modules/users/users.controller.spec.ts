@@ -19,6 +19,7 @@ const mockUser = {
   name: 'Omar Ali',
   email: 'omar@edusaas.com',
   role: Role.STUDENT,
+  impersonatedBy: null,
 };
 
 describe('UsersController', () => {
@@ -89,9 +90,10 @@ describe('UsersController', () => {
   describe('updateRole', () => {
     it('يغير الـ role', async () => {
       mockUsersService.updateRole.mockResolvedValue({ ...mockUser, role: Role.ADMIN });
-      const result = await controller.updateRole('user-123', 'admin-999', { role: Role.ADMIN });
+      const mockRequestUser = { id: 'admin-999', tenantId: 'tenant-abc' };
+      const result = await controller.updateRole('user-123', mockRequestUser, { role: Role.ADMIN });
       expect(result.role).toBe(Role.ADMIN);
-      expect(mockUsersService.updateRole).toHaveBeenCalledWith('user-123', Role.ADMIN, undefined);
+      expect(mockUsersService.updateRole).toHaveBeenCalledWith('user-123', 'tenant-abc', Role.ADMIN, 'admin-999');
     });
   });
 });

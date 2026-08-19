@@ -98,7 +98,7 @@ describe('AuthController', () => {
       expect(res.cookie).toHaveBeenCalledWith(
         'refresh-token',
         REFRESH_TOKEN,
-        expect.objectContaining({ httpOnly: true, path: '/auth/refresh' }),
+        expect.objectContaining({ httpOnly: true, path: '/api/auth/refresh' }),
       );
     });
 
@@ -187,7 +187,7 @@ describe('AuthController', () => {
       // new — must clear the refresh-token cookie too, with the same path
       expect(res.clearCookie).toHaveBeenCalledWith(
         'refresh-token',
-        expect.objectContaining({ path: '/auth/refresh' }),
+        expect.objectContaining({ path: '/api/auth/refresh' }),
       );
       expect(res.json).toHaveBeenCalledWith({ success: true });
     });
@@ -212,7 +212,7 @@ describe('AuthController', () => {
         'session-token', ACCESS_TOKEN, expect.objectContaining({ httpOnly: true }),
       );
       expect(res.cookie).toHaveBeenCalledWith(
-        'refresh-token', REFRESH_TOKEN, expect.objectContaining({ path: '/auth/refresh' }),
+        'refresh-token', REFRESH_TOKEN, expect.objectContaining({ path: '/api/auth/refresh' }),
       );
       expect(res.json).toHaveBeenCalledWith({
         success: true,

@@ -1,4 +1,5 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+jest.mock('puppeteer', () => ({}));
+import { Test, TestingModule } from '@nestjs/testing';
 import { QuizService } from './quiz.service';
 import { QuizRepository } from './quiz.repository';
 import { CertificatesService } from '../certificates/certificates.service';
@@ -113,7 +114,8 @@ describe('QuizService', () => {
       const mockList = [mockQuiz];
       repository.findAllWithCourse.mockResolvedValue(mockList);
       const result = await service.getAllQuizzes(TENANT_ID, STUDENT_ID);
-      expect(result).toEqual(mockList);
+      // QUIZ-WINDOW-NEW: service now attaches availability status per quiz
+      expect(result).toEqual(mockList.map((q) => ({ ...q, availability: 'open' })));
       expect(repository.findAllWithCourse).toHaveBeenCalledWith(TENANT_ID, ['course-123'], undefined);
     });
 
